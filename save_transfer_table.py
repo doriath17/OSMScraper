@@ -15,12 +15,23 @@ from rich.layout import Layout
 from rich.text import Text
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
 
-def scrape_transfer_table(playwright: Playwright) -> None:
+def scrape_transfer_table(
+    playwright: Playwright,
+    *,
+    state_file: str = "./tmp/state.json",
+    browser=None,
+    context=None,
+    page=None,
+) -> None:
     start_time = time.perf_counter()
 
-    browser = playwright.firefox.launch(headless=False)
-    context = browser.new_context(storage_state="./tmp/state.json")
-    page = context.new_page()
+    if browser is None:
+        browser = playwright.firefox.launch(headless=False)
+    if context is None:
+        context = browser.new_context(storage_state=state_file)
+    if page is None:
+        page = context.new_page()
+
     page.goto("https://en.onlinesoccermanager.com/Dashboard", wait_until="domcontentloaded")
 
     wallet_locator = page.locator(".wallet-amount span.pull-right").first
@@ -161,9 +172,11 @@ def scrape_transfer_table(playwright: Playwright) -> None:
 
     print("CSV successfully written to ./tmp/players_data.csv")
 
-    context.storage_state(path="./tmp/state.json")
-    context.close()
-    browser.close()
+    context.storage_state(path=state_file)
+    if context is not None and page is None:
+        context.close()
+    if browser is not None and page is None:
+        browser.close()
 
     elapsed_time = time.perf_counter() - start_time
     print(f"Total time elapsed: {elapsed_time:.2f} seconds")
