@@ -1,18 +1,21 @@
 import argparse
 import json
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 import re
 import csv
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Playwright
 
 try:
-    from playwright.sync_api import Playwright, sync_playwright, TimeoutError as PlaywrightTimeoutError
+    from playwright.sync_api import sync_playwright
+    PlaywrightTimeoutError = TimeoutError
 except ModuleNotFoundError:
-    Playwright = Any
     sync_playwright = None
-    class PlaywrightTimeoutError(Exception):
-        pass
+    PlaywrightTimeoutError = TimeoutError
 
 from TRParser import TRParser
 from Player import Player, to_number
@@ -33,7 +36,7 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeEl
 console = Console()
 
 def scrape_transfer_table(
-    playwright: Playwright,
+    playwright: Any,
     *,
     state_file: str = "./tmp/state.json",
     browser=None,
@@ -73,11 +76,15 @@ def scrape_transfer_table(
     league_index, _, players_csv_path, league_info_path = get_league_paths(slot_index)
     save_current_league_index(league_index)
 
+    scraped_at_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    scraped_at_local = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     data = {
         "team_name": team_name,
         "league_country": league_country,
         "matchday": matchday,
         "budget": budget,
+        "scraped_at": scraped_at_utc,
+        "scraped_at_local": scraped_at_local,
     }
 
     with open(league_info_path, "w", encoding="utf-8") as file:

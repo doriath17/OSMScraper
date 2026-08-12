@@ -44,9 +44,12 @@ def prompt_action(browser_open: bool):
     if not browser_open:
         options = [
             "[bold cyan]1[/bold cyan]) Launch browser\n"
-            "[bold cyan]2[/bold cyan]) Quit",
+            "[bold cyan]2[/bold cyan]) Run analysis\n"
+            "[bold cyan]3[/bold cyan]) Show saved leagues\n"
+            "[bold cyan]4[/bold cyan]) Interactive player calculator\n"
+            "[bold cyan]5[/bold cyan]) Quit",
         ]
-        choices = ["1", "2"]
+        choices = ["1", "2", "3", "4", "5"]
     else:
         options = [
             "[bold cyan]1[/bold cyan]) Run analysis\n"
@@ -102,10 +105,22 @@ def run_bot(headless: bool = False, offline: bool = False):
                     page.goto("https://en.onlinesoccermanager.com/")
                     print_current_league_context(page)
                     continue
-                if action in {"2", "q", "quit", "exit"}:
+                if action == "2":
+                    console.print("[bold green]Running analysis using saved local data...[/bold green]")
+                    run_analysis()
+                    continue
+                if action == "3":
+                    console.print("[bold green]Saved leagues overview:[/bold green]")
+                    show_saved_leagues()
+                    continue
+                if action == "4":
+                    console.print("[bold green]Opening interactive player calculator...[/bold green]")
+                    run_interactive_player()
+                    continue
+                if action in {"5", "q", "quit", "exit"}:
                     console.print("[bold red]Exiting.[/bold red]")
                     break
-                console.print("[red]Invalid option. Please choose 1 or 2.[/red]")
+                console.print("[red]Invalid option. Please choose from the visible menu.[/red]")
                 continue
 
             if action == "1":

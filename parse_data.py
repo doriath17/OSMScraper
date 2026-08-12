@@ -195,6 +195,8 @@ def get_saved_leagues() -> list[dict]:
                 "league_country": info.get("league_country", "Unknown country"),
                 "matchday": info.get("matchday", 0),
                 "budget": info.get("budget", 0.0),
+                "scraped_at": info.get("scraped_at", info.get("scraped_at_local", "Never")),
+                "scraped_at_local": info.get("scraped_at_local", info.get("scraped_at", "Never")),
                 "path": league_dir,
             }
         )
@@ -216,6 +218,7 @@ def show_saved_leagues():
     table.add_column("Country", min_width=18)
     table.add_column("Matchday", justify="center", width=10)
     table.add_column("Budget", justify="right", width=12)
+    table.add_column("Scraped (local)", min_width=20)
 
     for league in leagues:
         table.add_row(
@@ -224,6 +227,7 @@ def show_saved_leagues():
             league["league_country"],
             str(league["matchday"]),
             f"{league['budget']:.1f}M",
+            str(league["scraped_at_local"]),
         )
 
     console.print(table)
@@ -242,12 +246,14 @@ def run_analysis(limit: int = 10):
     team_name = league_info.get("team_name", "Unknown team")
     league_country = league_info.get("league_country", "Unknown country")
 
+    scraped_at_local = league_info.get("scraped_at_local", league_info.get("scraped_at", "Never"))
     console.print(
         Panel.fit(
             f"[bold]Team[/bold]: {team_name}\n"
             f"[bold]League[/bold]: {league_country}\n"
             f"[bold]Matchday[/bold]: {matchday}\n"
             f"[bold]Budget[/bold]: {budget}M\n"
+            f"[bold]Last scraped[/bold]: {scraped_at_local}\n"
             f"[bold]Players loaded[/bold]: {len(players)}\n"
             f"[bold]Visible after filters[/bold]: {len(filtered_players)}",
             title="League snapshot",
