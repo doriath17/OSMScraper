@@ -1,3 +1,4 @@
+import json
 import time
 from pathlib import Path
 import re
@@ -22,11 +23,28 @@ def scrape_transfer_table(playwright: Playwright) -> None:
     page = context.new_page()
     page.goto("https://en.onlinesoccermanager.com/Dashboard", wait_until="domcontentloaded")
 
+    wallet_locator = page.locator(".wallet-amount span.pull-right").first
+    wallet_locator.wait_for(state="visible", timeout=5000)
+
+    raw_budget = wallet_locator.text_content() or ""
+    raw_budget = raw_budget.strip()  # "10.6M"
+
+    budget = to_number(raw_budget)
+
     raw_text = page.locator("a.matchday-title").first.text_content() or ""
     match = re.search(r"\d+", raw_text)
     matchday = int(match.group()) if match else 0
-    with open("./tmp/league_info.txt", "w") as f:
-        f.write(f'Matchday: {matchday}')
+    # with open("./tmp/league_info.txt", "w") as f:
+    #     f.write(f'Matchday: {matchday}\n')
+    #     f.write(f'Budget: {budget}')
+
+    data = {
+        "matchday": matchday,
+        "budget": budget,
+    }
+
+    with open("./tmp/league_info.json", "w", encoding="utf-8") as file:
+        json.dump(data, file, indent=4)
 
     # input("Press ENTER to continue after verifying the page has loaded...")
     # context.storage_state(path="./tmp/state.json")
@@ -35,7 +53,6 @@ def scrape_transfer_table(playwright: Playwright) -> None:
 
     elapsed_time = time.perf_counter() - start_time
     print(f"Total time elapsed: {elapsed_time:.2f} seconds")
-
 
     link = page.get_by_role("link", name=re.compile(r"^Transfer", re.IGNORECASE)).first
     link.click()

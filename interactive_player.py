@@ -38,19 +38,26 @@ def prompt_interactive():
         except ValueError:
             print("Inserisci un numero valido.")
 
-    preseason_str = input("È Pre-stagione? (s/n, default: n): ").strip().lower()
-    preseason = preseason_str in ['s', 'si', 'y', 'yes', 'true']
+    while True:
+        matchday_input = input("Matchday (es. 1): ").strip()
+        if matchday_input.isdigit():
+            matchday = int(matchday_input)
+            if matchday >= 1:
+                break
+            print("Il matchday deve essere almeno 1.")
+        else:
+            print("Inserisci un numero intero valido per il matchday.")
 
-    return pos, age, overall, base_value, preseason
+    return pos, age, overall, base_value, matchday
 
 
 def main():
-    pos, age, overall, base_value, preseason = prompt_interactive()
-    price = get_selling_price(pos, age, overall, base_value, preseason)
+    pos, age, overall, base_value, matchday = prompt_interactive()
+    price = get_selling_price(pos, age, overall, base_value, matchday)
 
     print("\n-------------------------------------------")
     print(f"Giocatore: [{pos}] Età: {age} | OVR: {overall} | Valore Base: ${base_value}M")
-    print(f"Fase: {'Pre-stagione' if preseason else 'In-season'}")
+    print(f"Matchday: {matchday}")
     print(f"-> Prezzo consigliato: ${price}M")
     print("-------------------------------------------\n")
 
