@@ -5,6 +5,7 @@ import csv
 from playwright.sync_api import Playwright, sync_playwright, TimeoutError as PlaywrightTimeoutError
 from TRParser import TRParser
 from Player import Player, to_number
+from parse_data import transfer_player_headers
 
 # Imports for Rich TUI
 from rich.live import Live
@@ -113,14 +114,12 @@ def run(playwright: Playwright) -> None:
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     file_exists = csv_path.exists()
 
-    headers = [
-        'Name', 'Position', 'Age', 'Nationality', 
-        'Club', 'Attack', 'Defense', 'Overall', 'Market Value', 'Base Value'
-    ]
-
     with open(csv_path, 'w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
-        writer.writerow(headers)
+        writer.writerow([
+            transfer_player_headers["NAME"], transfer_player_headers["POSITION"], transfer_player_headers["AGE"], transfer_player_headers["NATIONALITY"],
+            transfer_player_headers["CLUB"], transfer_player_headers["ATTACK"], transfer_player_headers["DEFENSE"], transfer_player_headers["OVERALL"], transfer_player_headers["MARKET_VALUE"], transfer_player_headers["BASE_VALUE"]
+        ])
 
         for p in players:
             writer.writerow([

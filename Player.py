@@ -3,7 +3,7 @@
 MAX_PRICE_FACTOR = 2.5
 
 class Player: 
-    def __init__(self, name, position, age, nationality, club, attack, defense, overall, market_value, base_value=0):
+    def __init__(self, name, position, age, nationality, club, attack, defense, overall, market_value, base_value=0.0):
         self.name = name
         self.position = position
         self.age = age
@@ -13,7 +13,7 @@ class Player:
         self.defense = defense
         self.overall = overall
         self.market_value: float = market_value
-        self.base_value: float = market_value 
+        self.base_value: float = base_value
 
     def __repr__(self):
         return f"Player(name={self.name}, position={self.position}, age={self.age}, nationality={self.nationality}, club={self.club}, attack={self.attack}, defense={self.defense}, overall={self.overall}, market_value={self.market_value})"
@@ -24,32 +24,71 @@ class Player:
     def max_price(self) -> float:
         return self.base_value * MAX_PRICE_FACTOR
 
-    def selling_price(self, preseason = False) -> float:
-        max_price = self.max_price()
+    def selling_price(self, preseason: bool = False) -> float:
+            max_price = self.max_price()
 
-        if preseason:
-            if max_price <= 10.0: 
-                return max_price # sell at 100% of max price
-            elif max_price <= 15.0:
-                return max_price * 0.9 # sell at 90% of max price
-            elif max_price <= 24.0:
-                return max_price * 0.8 # sell at 80% of max price
-            else: # max_price > 24.0
-                return max_price * 0.7 # sell at 70% of max price
+            # 1. Ratio Base (in base al max_price)
+            if preseason:
+                if max_price <= 10.0:
+                    base_ratio = 1.0
+                elif max_price <= 15.0:
+                    base_ratio = 0.90
+                elif max_price <= 24.0:
+                    base_ratio = 0.80
+                else:
+                    base_ratio = 0.70
+            else:
+                if max_price <= 5.0:
+                    base_ratio = 1.0
+                elif max_price <= 12.0:
+                    base_ratio = 0.90
+                elif max_price <= 18.0:
+                    base_ratio = 0.80
+                elif max_price <= 24.0:
+                    base_ratio = 0.70
+                else:
+                    base_ratio = 0.60
 
-        if max_price <= 5.0:
-            return max_price # sell at 100% of max price
-        elif max_price <= 12.0: 
-            return max_price * 0.9 # sell at 90% of max price
-        elif max_price <= 18.0:
-            return max_price * 0.8 # sell at 80% of max price
-        elif max_price <= 24.0:
-            return max_price * 0.7 # sell at 70% of max price
-        else: # max_price >= 24.0
-            return max_price * 0.6 # sell at 60% of max price
+            # 2. Modificatore Età
+            age_mod = 0.0
+            if self.age <= 21:
+                age_mod = +0.10 if max_price > 18.0 else +0.05
+            elif 22 <= self.age <= 25:
+                age_mod = +0.03
+            elif 29 <= self.age <= 32:
+                age_mod = -0.05
+            elif self.age >= 33:
+                age_mod = -0.10
+
+            # 3. Modificatore Rating (OVR)
+            ovr_mod = 0.0
+            if self.overall >= 88:
+                ovr_mod = +0.08  # Mantiene alto il prezzo per stelle/top player
+            elif self.overall >= 82:
+                ovr_mod = +0.04
+            elif self.overall <= 72:
+                ovr_mod = +0.05  # I giocatori scarsi valgono poco, si vendono al max per fare cassa rapida
+
+            # 4. Modificatore Ruolo (self.position: "FW", "MF", "DF", "GK")
+            pos_mod = 0.0
+            position = getattr(self, 'position', '').upper()
+            
+            if position in ['FW', 'ATT']:
+                pos_mod = +0.03   # Alta domanda di attaccanti
+            elif position in ['GK', 'POR']:
+                pos_mod = -0.05   # Bassa domanda di portieri, prezzo più aggressivo per sbloccare lo slot
+
+            # 5. Calcolo Ratio Finale e Clamp (tra 0.50 e 1.0)
+            total_mod = age_mod + ovr_mod + pos_mod
+            final_ratio = min(1.0, max(0.50, base_ratio + total_mod))
+
+            return round(max_price * final_ratio, 1)
 
     def profit(self, preseason = False) -> float:
         return self.selling_price(preseason) - self.base_value
+
+    def is_stricker(self) -> bool:
+        return self.position in ["ST", "CF", "LW", "RW"]
 
 def to_number(value): 
     if value is None:
