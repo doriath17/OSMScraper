@@ -114,3 +114,7 @@ def to_number(value):
             return None
 
     return float(value)
+
+def get_selling_price(position, age, overall, base_value, preseason=False):
+    player = Player(name="", position=position, age=age, nationality="", club="", attack=0, defense=0, overall=overall, market_value=0.0, base_value=base_value)
+    return player.selling_price(preseason)

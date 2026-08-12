@@ -14,7 +14,7 @@ from rich.layout import Layout
 from rich.text import Text
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
 
-def run(playwright: Playwright) -> None:
+def scrape_transfer_table(playwright: Playwright) -> None:
     start_time = time.perf_counter()
 
     browser = playwright.firefox.launch(headless=False)
@@ -139,4 +139,4 @@ def run(playwright: Playwright) -> None:
 
 if __name__ == "__main__":
     with sync_playwright() as playwright:
-        run(playwright)
+        scrape_transfer_table(playwright)
