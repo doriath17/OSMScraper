@@ -79,6 +79,7 @@ def scrape_transfer_table(
     scraped_at_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     scraped_at_local = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     data = {
+        "league_index": league_index,
         "team_name": team_name,
         "league_country": league_country,
         "matchday": matchday,

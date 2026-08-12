@@ -7,7 +7,7 @@ from rich.prompt import Prompt
 
 from change_league import STATE_FILE, open_career_selection, select_league_slot
 from interactive_player import main as run_interactive_player
-from parse_data import run_analysis, show_saved_leagues
+from parse_data import get_saved_leagues, run_analysis, show_saved_leagues
 from save_state import login_session, logout_session
 from save_transfer_table import scrape_transfer_table
 
@@ -69,9 +69,24 @@ def prompt_action(browser_open: bool):
 
 
 def ask_for_slot_index():
+    available_slots = []
+    choices = []
+    saved_leagues = {league["index"]: league for league in get_saved_leagues()}
+
+    for slot_index in range(1, 5):
+        league_name = saved_leagues.get(slot_index, {}).get("team_name")
+        label = str(slot_index)
+        if league_name and league_name != "Unknown team":
+            label = f"{slot_index} - {league_name}"
+        available_slots.append(slot_index)
+        choices.append(label)
+
     while True:
-        raw = Prompt.ask("Enter league index", choices=["0", "1", "2", "3"])
-        return int(raw)
+        raw = Prompt.ask("Enter league index", choices=choices)
+        try:
+            return int(raw.split(" - ", 1)[0].strip())
+        except ValueError:
+            console.print("[red]Please choose a valid league index.[/red]")
 
 
 def run_bot(headless: bool = False, offline: bool = False):

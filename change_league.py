@@ -23,19 +23,19 @@ def open_career_selection(page):
     page.wait_for_selector(".career-teamslot-wrapper", timeout=20000)
 
 
-def select_league_slot(page, slot_index=0):
-    """Click one of the four career slots in the manager selection grid."""
+def select_league_slot(page, slot_index=1):
+    """Click one of the career slots in the manager selection grid."""
     slots = page.locator(".career-teamslot-wrapper")
     count = slots.count()
 
     if count == 0:
         raise RuntimeError("No career slots were found on the page.")
 
-    if slot_index < 0 or slot_index >= count:
+    if slot_index < 1 or slot_index > count:
         raise ValueError(f"slot_index={slot_index} is out of range for {count} slots")
 
-    # Use the nth child of the container to select the slot you want.
-    slot = slots.nth(slot_index)
+    zero_based_slot_index = slot_index - 1
+    slot = slots.nth(zero_based_slot_index)
     slot.locator(".career-teamslot-container").click(force=True)
 
     page.wait_for_load_state("networkidle", timeout=20000)
@@ -51,7 +51,7 @@ def select_league_slot(page, slot_index=0):
     page.wait_for_load_state("domcontentloaded", timeout=20000)
 
 
-def run_change_league(slot_index=0):
+def run_change_league(slot_index=1):
     if sync_playwright is None:
         print("Playwright is not installed. Install dependencies with: pip install -r requirements.txt")
         return
@@ -75,5 +75,5 @@ def run_change_league(slot_index=0):
 
 
 if __name__ == "__main__":
-    # 0 and 1 are typically the active manager slots; 2 and 3 are often locked.
-    run_change_league(slot_index=0)
+    # 1 and 2 are typically the active manager slots; 3 and 4 are often locked.
+    run_change_league(slot_index=1)

@@ -30,36 +30,41 @@ CURRENT_LEAGUE_PATH = Path('./tmp/current_league.json')
 
 
 def build_players_filename(slot_index: int, team_name: str | None = None) -> str:
-    slug = ""
-    if team_name:
-        slug = re.sub(r"[^a-z0-9]+", "_", team_name.lower()).strip("_")
-
-    if slug:
-        return f"league_{slot_index}_{slug}_players.csv"
     return f"league_{slot_index}_players.csv"
+
+
+def normalize_slot_index(slot_index: int | None) -> int:
+    if slot_index is None:
+        return 1
+
+    index = int(slot_index)
+    if index < 1:
+        return 1
+    return index
 
 
 def get_current_league_index() -> int:
     if not CURRENT_LEAGUE_PATH.exists():
-        return 0
+        return 1
 
     try:
         with open(CURRENT_LEAGUE_PATH, 'r', encoding='utf-8') as file:
             data = json.load(file)
-        return int(data.get('current_league', 0))
+        return normalize_slot_index(data.get('current_league', 1))
     except (json.JSONDecodeError, TypeError, ValueError):
-        return 0
+        return 1
 
 
 def save_current_league_index(slot_index: int) -> Path:
     CURRENT_LEAGUE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    normalized_index = normalize_slot_index(slot_index)
     with open(CURRENT_LEAGUE_PATH, 'w', encoding='utf-8') as file:
-        json.dump({'current_league': int(slot_index)}, file, indent=4)
+        json.dump({'current_league': int(normalized_index)}, file, indent=4)
     return CURRENT_LEAGUE_PATH
 
 
 def get_league_paths(slot_index: int | None = None):
-    league_index = int(slot_index) if slot_index is not None else get_current_league_index()
+    league_index = normalize_slot_index(slot_index) if slot_index is not None else get_current_league_index()
     league_dir = LEAGUE_ROOT_PATH / f'league_{league_index}'
     league_dir.mkdir(parents=True, exist_ok=True)
 
@@ -177,6 +182,18 @@ def get_saved_leagues() -> list[dict]:
 
     saved = []
     for league_dir in sorted(LEAGUE_ROOT_PATH.glob("league_*"), key=lambda p: p.name):
+        if not league_dir.is_dir():
+            continue
+
+        league_name = league_dir.name
+        try:
+            league_number = int(league_name.replace("league_", ""))
+        except ValueError:
+            continue
+
+        if league_number < 1:
+            continue
+
         info_path = league_dir / "league_info.json"
         if not info_path.exists():
             continue
@@ -187,10 +204,11 @@ def get_saved_leagues() -> list[dict]:
         except json.JSONDecodeError:
             info = {}
 
-        league_index = league_dir.name.replace("league_", "")
+        raw_index = info.get("league_index", league_number)
+        league_index = max(1, int(raw_index))
         saved.append(
             {
-                "index": int(league_index),
+                "index": league_index,
                 "team_name": info.get("team_name", "Unknown team"),
                 "league_country": info.get("league_country", "Unknown country"),
                 "matchday": info.get("matchday", 0),
@@ -221,9 +239,14 @@ def show_saved_leagues():
     table.add_column("Scraped (local)", min_width=20)
 
     for league in leagues:
+        index_label = str(league["index"])
+        team_name = league["team_name"]
+        if team_name and team_name != "Unknown team":
+            index_label = f"{index_label} - {team_name}"
+
         table.add_row(
-            str(league["index"]),
-            league["team_name"],
+            index_label,
+            team_name,
             league["league_country"],
             str(league["matchday"]),
             f"{league['budget']:.1f}M",
@@ -235,9 +258,21 @@ def show_saved_leagues():
 
 def run_analysis(limit: int = 10):
     console = Console()
-    players = load_transfer_players()
 
-    league_info = load_league_info()
+    try:
+        players = load_transfer_players()
+        league_info = load_league_info()
+    except FileNotFoundError as exc:
+        console.print("[yellow]No saved data found for the current league.[/yellow]")
+        console.print(f"[cyan]{exc}[/cyan]")
+        console.print("[cyan]Scrape a league first, or switch to an existing saved league before running analysis.[/cyan]")
+        return
+    except (json.JSONDecodeError, ValueError, TypeError) as exc:
+        console.print("[red]The saved league data is invalid or incomplete.[/red]")
+        console.print(f"[cyan]{exc}[/cyan]")
+        console.print("[cyan]Re-scrape the league or delete the stale files under ./tmp/leagues to continue.[/cyan]")
+        return
+
     matchday = league_info.get("matchday", 0)
     budget = league_info.get("budget", 0.0)
 
