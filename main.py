@@ -13,7 +13,7 @@ def run_bot():
     for player in sorted_players:
         print(f"[{player.name}, {player.position}]: Profit = {player.profit(preseason=False):.2f}, Base Value = {player.base_value:.2f}, Selling Price = {player.selling_price(preseason=False):.2f}")
 
-# playwright codegen --browser firefox --load-storage=state.json --save-storage=state.json https://en.onlinesoccermanager.com/
+# playwright codegen --browser firefox --load-storage=./tmp/state.json --save-storage=./tmp/state.json https://en.onlinesoccermanager.com/
 
 if __name__ == "__main__":
     run_bot()

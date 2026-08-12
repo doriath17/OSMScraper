@@ -20,7 +20,22 @@ def scrape_transfer_table(playwright: Playwright) -> None:
     browser = playwright.firefox.launch(headless=False)
     context = browser.new_context(storage_state="./tmp/state.json")
     page = context.new_page()
-    page.goto("https://en.onlinesoccermanager.com/Dashboard")
+    page.goto("https://en.onlinesoccermanager.com/Dashboard", wait_until="domcontentloaded")
+
+    raw_text = page.locator("a.matchday-title").first.text_content() or ""
+    match = re.search(r"\d+", raw_text)
+    matchday = int(match.group()) if match else 0
+    with open("./tmp/league_info.txt", "w") as f:
+        f.write(f'Matchday: {matchday}')
+
+    # input("Press ENTER to continue after verifying the page has loaded...")
+    # context.storage_state(path="./tmp/state.json")
+    # context.close()
+    # browser.close()
+
+    elapsed_time = time.perf_counter() - start_time
+    print(f"Total time elapsed: {elapsed_time:.2f} seconds")
+
 
     link = page.get_by_role("link", name=re.compile(r"^Transfer", re.IGNORECASE)).first
     link.click()
