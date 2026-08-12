@@ -1,40 +1,47 @@
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+from rich.console import Console
+from rich.panel import Panel
+from rich.prompt import Prompt
 
 from change_league import STATE_FILE, open_career_selection, select_league_slot
-from parse_data import run_analysis
+from interactive_player import main as run_interactive_player
+from parse_data import run_analysis, show_saved_leagues
+from save_state import login_session, logout_session
 from save_transfer_table import scrape_transfer_table
+
+console = Console()
 
 
 def prompt_action():
-    print("\nWhat do you want to do?")
-    print("1) Run analysis")
-    print("2) Scrape transfer table")
-    print("3) Change league")
-    print("4) Quit")
-    return input("Choose an option [1/2/3/4]: ").strip()
+    console.print()
+    console.print(
+        Panel.fit(
+            "[bold cyan]1[/bold cyan]) Run analysis\n"
+            "[bold cyan]2[/bold cyan]) Scrape transfer table\n"
+            "[bold cyan]3[/bold cyan]) Change league\n"
+            "[bold cyan]4[/bold cyan]) Login\n"
+            "[bold cyan]5[/bold cyan]) Logout\n"
+            "[bold cyan]6[/bold cyan]) Show saved leagues\n"
+            "[bold cyan]7[/bold cyan]) Interactive player calculator\n"
+            "[bold cyan]8[/bold cyan]) Quit",
+            title="OSM Manager",
+            border_style="green",
+        )
+    )
+    return Prompt.ask("Choose an option", choices=["1", "2", "3", "4", "5", "6", "7", "8"]).strip()
 
 
 def ask_for_slot_index():
     while True:
-        raw = input("Enter league index (0-3): ").strip()
-        try:
-            slot_index = int(raw)
-        except ValueError:
-            print("Please enter a valid integer.")
-            continue
-
-        if slot_index not in (0, 1, 2, 3):
-            print("League index must be one of: 0, 1, 2, 3")
-            continue
-
-        return slot_index
+        raw = Prompt.ask("Enter league index", choices=["0", "1", "2", "3"])
+        return int(raw)
 
 
 def run_bot():
     if not Path(STATE_FILE).exists():
-        print(f"Error: '{STATE_FILE}' not found. Run save_state.py first.")
+        console.print(f"[bold red]Error:[/bold red] '{STATE_FILE}' not found. Run save_state.py first.")
         return
 
     with sync_playwright() as playwright:
@@ -43,19 +50,19 @@ def run_bot():
         page = context.new_page()
 
         try:
-            print("Opening dashboard...")
+            console.print("[bold yellow]Opening dashboard...[/bold yellow]")
             page.goto("https://en.onlinesoccermanager.com/")
 
             while True:
                 action = prompt_action()
 
                 if action == "1":
-                    print("Running analysis using the currently loaded player data...")
+                    console.print("[bold green]Running analysis using the currently loaded player data...[/bold green]")
                     run_analysis()
                     continue
 
                 if action == "2":
-                    print("Scraping transfer table and saving the league context...")
+                    console.print("[bold green]Scraping transfer table and saving the league context...[/bold green]")
                     scrape_transfer_table(
                         playwright,
                         state_file=STATE_FILE,
@@ -66,20 +73,40 @@ def run_bot():
                     continue
 
                 if action == "3":
-                    print("Opening career/league selection...")
+                    console.print("[bold green]Opening career/league selection...[/bold green]")
                     open_career_selection(page)
                     slot_index = ask_for_slot_index()
-                    print(f"Changing to league slot #{slot_index}...")
+                    console.print(f"[bold yellow]Changing to league slot #{slot_index}...[/bold yellow]")
                     select_league_slot(page, slot_index)
-                    print(f"League slot #{slot_index} selected.")
-                    print("You are now on the league page. Choose next action from the dashboard when ready.")
+                    console.print(f"[bold green]League slot #{slot_index} selected.[/bold green]")
+                    console.print("[cyan]You are now on the league page. Choose your next action from the dashboard.[/cyan]")
                     continue
 
-                if action in {"4", "q", "quit", "exit"}:
-                    print("Exiting.")
+                if action == "4":
+                    console.print("[bold green]Starting login flow...[/bold green]")
+                    login_session()
+                    continue
+
+                if action == "5":
+                    console.print("[bold yellow]Logging out...[/bold yellow]")
+                    logout_session()
+                    continue
+
+                if action == "6":
+                    console.print("[bold green]Saved leagues overview:[/bold green]")
+                    show_saved_leagues()
+                    continue
+
+                if action == "7":
+                    console.print("[bold green]Opening interactive player calculator...[/bold green]")
+                    run_interactive_player()
+                    continue
+
+                if action in {"8", "q", "quit", "exit"}:
+                    console.print("[bold red]Exiting.[/bold red]")
                     break
 
-                print("Invalid option. Please choose 1, 2, 3, or 4.")
+                console.print("[red]Invalid option. Please choose 1, 2, 3, 4, 5, 6, 7, or 8.[/red]")
         finally:
             browser.close()
 

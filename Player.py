@@ -3,7 +3,7 @@
 MAX_PRICE_FACTOR = 2.5
 
 class Player: 
-    def __init__(self, name, position, age, nationality, club, attack, defense, overall, market_value, base_value=0.0):
+    def __init__(self, name, position, age, nationality, club, attack, defense, overall, main_stat, market_value=0.0, base_value=0.0):
         self.name = name
         self.position = position
         self.age = age
@@ -12,11 +12,18 @@ class Player:
         self.attack = attack
         self.defense = defense
         self.overall = overall
-        self.market_value: float = market_value
-        self.base_value: float = base_value
+        self.main_stat = main_stat
+        self.market_value: float = float(market_value)
+        self.base_value: float = float(base_value)
+        self.stats = (self.attack, self.defense, self.overall, self.main_stat)
 
     def __repr__(self):
-        return f"Player(name={self.name}, position={self.position}, age={self.age}, nationality={self.nationality}, club={self.club}, attack={self.attack}, defense={self.defense}, overall={self.overall}, market_value={self.market_value})"
+        return (
+            f"Player(name={self.name}, position={self.position}, age={self.age}, "
+            f"nationality={self.nationality}, club={self.club}, attack={self.attack}, "
+            f"defense={self.defense}, overall={self.overall}, main_stat={self.main_stat}, "
+            f"market_value={self.market_value})"
+        )
 
     def set_base_value(self, base_value):
         self.base_value = base_value
@@ -109,7 +116,7 @@ class Player:
             }
 
     def profit(self, matchday=0):
-        return self.selling_price(matchday=matchday)["price"] - self.base_value
+        return self.selling_price(matchday=matchday)["price"] - self.market_value
 
     def is_stricker(self) -> bool:
         return self.position in ["ST", "CF", "LW", "RW"]
@@ -142,6 +149,7 @@ def to_number(value):
 def get_selling_price(position, age, overall, base_value, matchday=1):
     player = Player(
         name="", position=position, age=age, nationality="", club="",
-        attack=0, defense=0, overall=overall, market_value=0.0, base_value=base_value
+        attack=0, defense=0, overall=overall, main_stat=overall,
+        market_value=0.0, base_value=base_value
     )
     return player.selling_price(matchday=matchday)

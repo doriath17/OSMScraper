@@ -2,6 +2,8 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
+from parse_data import save_current_league_index
+
 STATE_FILE = "./tmp/state.json"
 
 def open_career_selection(page):
@@ -34,6 +36,16 @@ def select_league_slot(page, slot_index=0):
     slot.locator(".career-teamslot-container").click(force=True)
 
     page.wait_for_load_state("networkidle", timeout=20000)
+    page.wait_for_timeout(1000)
+
+    save_current_league_index(slot_index)
+
+    # After switching leagues, return to the dashboard home page so the updated league is visible.
+    home_link = page.get_by_role("link", name="Home")
+    home_link.wait_for(state="visible", timeout=20000)
+    home_link.click()
+    page.wait_for_url("**/Dashboard", timeout=20000)
+    page.wait_for_load_state("domcontentloaded", timeout=20000)
 
 
 def run_change_league(slot_index=0):

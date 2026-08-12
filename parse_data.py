@@ -1,26 +1,63 @@
 import csv
 import json
 from pathlib import Path
+
+from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
 from Player import Player
 
 transfer_player_headers = {
     "NAME": "Name",
     "POSITION": "Position",
     "AGE": "Age",
-    "NATIONALITY": "Nationality",
     "CLUB": "Club",
     "ATTACK": "Attack",
     "DEFENSE": "Defense",
     "OVERALL": "Overall",
+    "MAIN_STAT": "Main Stat",
     "MARKET_VALUE": "Market Value",
     "BASE_VALUE": "Base Value"
 }
 
 TRANSFER_PLAYERS_CSV_PATH = Path('./tmp/players_data.csv')
 LEAGUE_INFO_JSON_PATH = Path('./tmp/league_info.json')
+LEAGUE_ROOT_PATH = Path('./tmp/leagues')
+CURRENT_LEAGUE_PATH = Path('./tmp/current_league.json')
 
-def load_transfer_players() -> list[Player]:
-    csv_file = TRANSFER_PLAYERS_CSV_PATH
+
+def get_current_league_index() -> int:
+    if not CURRENT_LEAGUE_PATH.exists():
+        return 0
+
+    try:
+        with open(CURRENT_LEAGUE_PATH, 'r', encoding='utf-8') as file:
+            data = json.load(file)
+        return int(data.get('current_league', 0))
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return 0
+
+
+def save_current_league_index(slot_index: int) -> Path:
+    CURRENT_LEAGUE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(CURRENT_LEAGUE_PATH, 'w', encoding='utf-8') as file:
+        json.dump({'current_league': int(slot_index)}, file, indent=4)
+    return CURRENT_LEAGUE_PATH
+
+
+def get_league_paths(slot_index: int | None = None):
+    league_index = int(slot_index) if slot_index is not None else get_current_league_index()
+    league_dir = LEAGUE_ROOT_PATH / f'league_{league_index}'
+    league_dir.mkdir(parents=True, exist_ok=True)
+    players_csv_path = league_dir / 'players_data.csv'
+    league_info_path = league_dir / 'league_info.json'
+    return league_index, league_dir, players_csv_path, league_info_path
+
+
+def load_transfer_players(slot_index: int | None = None) -> list[Player]:
+    _, _, csv_file, _ = get_league_paths(slot_index)
     if not csv_file.exists():
         raise FileNotFoundError(f"CSV file not found: {csv_file}")
 
@@ -29,27 +66,39 @@ def load_transfer_players() -> list[Player]:
     with open(csv_file, 'r', newline='', encoding='utf-8') as file:
         reader = csv.DictReader(file)
         for row in reader:
+            club_value = (row.get(transfer_player_headers["CLUB"]) or row.get("Nationality") or "").strip()
+            if not club_value and "Club" not in row:
+                club_value = (row.get("Nationality") or "").strip()
+
+            attack = int(row.get(transfer_player_headers["ATTACK"], 0) or 0)
+            defense = int(row.get(transfer_player_headers["DEFENSE"], 0) or 0)
+            overall = int(row.get(transfer_player_headers["OVERALL"], 0) or 0)
+            main_stat = int(row.get(transfer_player_headers["MAIN_STAT"], overall) or overall)
+
             player = Player(
                 name=row[transfer_player_headers["NAME"]],
                 position=row[transfer_player_headers["POSITION"]],
                 age=int(row[transfer_player_headers["AGE"]]),
-                nationality=row[transfer_player_headers["NATIONALITY"]],
-                club=row[transfer_player_headers["CLUB"]],
-                attack=int(row[transfer_player_headers["ATTACK"]]),
-                defense=int(row[transfer_player_headers["DEFENSE"]]),
-                overall=int(row[transfer_player_headers["OVERALL"]]),
-                market_value=float(row[transfer_player_headers["MARKET_VALUE"]]),
-                base_value=float(row[transfer_player_headers["BASE_VALUE"]])
+                nationality="",
+                club=club_value,
+                attack=attack,
+                defense=defense,
+                overall=overall,
+                main_stat=main_stat,
+                market_value=float(row.get(transfer_player_headers["MARKET_VALUE"], 0.0) or 0.0),
+                base_value=float(row.get(transfer_player_headers["BASE_VALUE"], 0.0) or 0.0)
             )
             players.append(player)
 
     return players
 
-def load_league_info() -> dict:
-    if not LEAGUE_INFO_JSON_PATH.exists():
-        raise FileNotFoundError(f"League info file not found: {LEAGUE_INFO_JSON_PATH}")
 
-    with open(LEAGUE_INFO_JSON_PATH, "r", encoding="utf-8") as file:
+def load_league_info(slot_index: int | None = None) -> dict:
+    _, _, _, league_info_path = get_league_paths(slot_index)
+    if not league_info_path.exists():
+        raise FileNotFoundError(f"League info file not found: {league_info_path}")
+
+    with open(league_info_path, "r", encoding="utf-8") as file:
         loaded_data = json.load(file)
     return loaded_data
 
@@ -64,20 +113,148 @@ def analyze_player(player: Player, matchday: int = 1):
     print(f"[{player.name}, {player.position}]: Profit = {player.profit(matchday=matchday):.2f}, Base Value = {player.base_value:.2f}, Selling Price = {selling_price_info['price']:.2f}")
     print(f"  Breakdown: Base Ratio = {selling_price_info['breakdown']['base_ratio']}, Age Modifier = {selling_price_info['breakdown']['age_modifier']}, OVR Modifier = {selling_price_info['breakdown']['ovr_modifier']}, Position Modifier = {selling_price_info['breakdown']['pos_modifier']}")
 
-def run_analysis():
+def build_analysis_table(players: list[Player], matchday: int, limit: int = 10) -> Table:
+    table = Table(
+        title=f"Top transfer targets for matchday {matchday}",
+        box=box.SIMPLE_HEAVY,
+        header_style="bold cyan",
+        show_lines=False,
+        expand=True,
+    )
+
+    table.add_column("Name", style="bold white", min_width=18)
+    table.add_column("Pos", justify="center", width=6)
+    table.add_column("Age", justify="center", width=5)
+    table.add_column("Club", min_width=18)
+    table.add_column("Main", justify="center", width=6)
+    table.add_column("Base", justify="right", width=8)
+    table.add_column("Market", justify="right", width=10)
+    table.add_column("Sell", justify="right", width=8)
+    table.add_column("Profit", justify="right", width=10)
+
+    for player in players[:limit]:
+        sell_price = player.selling_price(matchday=matchday)["price"]
+        profit = player.profit(matchday=matchday)
+        profit_text = f"[red]{profit:.1f}M[/red]" if profit < 0 else f"[green]{profit:.1f}M[/green]"
+        table.add_row(
+            player.name,
+            player.position,
+            str(player.age),
+            player.club,
+            str(player.main_stat),
+            f"{player.base_value:.1f}M",
+            f"{player.market_value:.1f}M",
+            f"{sell_price:.1f}M",
+            profit_text,
+        )
+
+    return table
+
+
+def get_saved_leagues() -> list[dict]:
+    if not LEAGUE_ROOT_PATH.exists():
+        return []
+
+    saved = []
+    for league_dir in sorted(LEAGUE_ROOT_PATH.glob("league_*"), key=lambda p: p.name):
+        info_path = league_dir / "league_info.json"
+        if not info_path.exists():
+            continue
+
+        try:
+            with open(info_path, "r", encoding="utf-8") as file:
+                info = json.load(file)
+        except json.JSONDecodeError:
+            info = {}
+
+        league_index = league_dir.name.replace("league_", "")
+        saved.append(
+            {
+                "index": int(league_index),
+                "team_name": info.get("team_name", "Unknown team"),
+                "league_country": info.get("league_country", "Unknown country"),
+                "matchday": info.get("matchday", 0),
+                "budget": info.get("budget", 0.0),
+                "path": league_dir,
+            }
+        )
+
+    return saved
+
+
+def show_saved_leagues():
+    console = Console()
+    leagues = get_saved_leagues()
+
+    if not leagues:
+        console.print("[yellow]No saved leagues found in ./tmp/leagues.[/yellow]")
+        return
+
+    table = Table(title="Saved leagues", box=box.SIMPLE_HEAVY, header_style="bold cyan")
+    table.add_column("Index", justify="center", width=8)
+    table.add_column("Team", style="bold white", min_width=20)
+    table.add_column("Country", min_width=18)
+    table.add_column("Matchday", justify="center", width=10)
+    table.add_column("Budget", justify="right", width=12)
+
+    for league in leagues:
+        table.add_row(
+            str(league["index"]),
+            league["team_name"],
+            league["league_country"],
+            str(league["matchday"]),
+            f"{league['budget']:.1f}M",
+        )
+
+    console.print(table)
+
+
+def run_analysis(limit: int = 10):
+    console = Console()
     players = load_transfer_players()
 
     league_info = load_league_info()
     matchday = league_info.get("matchday", 0)
     budget = league_info.get("budget", 0.0)
-    
+
     filtered_players = filter_players(players, current_budget=budget, matchday=matchday)
 
-    print(f"Matchday: {matchday}")
-    print(f"Budget: {budget}M")
-    print(f"Total Players Loaded: {len(players)}")
-    for player in filtered_players:
-        analyze_player(player, matchday=matchday)
+    team_name = league_info.get("team_name", "Unknown team")
+    league_country = league_info.get("league_country", "Unknown country")
+
+    console.print(
+        Panel.fit(
+            f"[bold]Team[/bold]: {team_name}\n"
+            f"[bold]League[/bold]: {league_country}\n"
+            f"[bold]Matchday[/bold]: {matchday}\n"
+            f"[bold]Budget[/bold]: {budget}M\n"
+            f"[bold]Players loaded[/bold]: {len(players)}\n"
+            f"[bold]Visible after filters[/bold]: {len(filtered_players)}",
+            title="League snapshot",
+            border_style="green",
+        )
+    )
+
+    if not filtered_players:
+        console.print("[yellow]No players match the current budget and matchday.[/yellow]")
+        return
+
+    console.print(build_analysis_table(filtered_players, matchday=matchday, limit=limit))
+
+    console.print("")
+    top_player = filtered_players[0]
+    sell_price = top_player.selling_price(matchday=matchday)["price"]
+    profit_value = top_player.profit(matchday=matchday)
+    profit_style = "red" if profit_value < 0 else "green"
+    console.print(
+        Panel.fit(
+            f"[bold]{top_player.name}[/bold] | {top_player.position} | {top_player.club}\n"
+            f"Profit: [{profit_style}]{profit_value:.1f}M[/{profit_style}] | "
+            f"Base: {top_player.base_value:.1f}M | Market: {top_player.market_value:.1f}M | Sell: {sell_price:.1f}M",
+            title="Best current pick",
+            border_style="cyan",
+        )
+    )
 
 if __name__ == "__main__":
     run_analysis()

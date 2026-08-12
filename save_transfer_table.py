@@ -6,14 +6,21 @@ import csv
 from playwright.sync_api import Playwright, sync_playwright, TimeoutError as PlaywrightTimeoutError
 from TRParser import TRParser
 from Player import Player, to_number
-from parse_data import transfer_player_headers
+from parse_data import (
+    get_league_paths,
+    save_current_league_index,
+    transfer_player_headers,
+)
 
 # Imports for Rich TUI
+from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
 from rich.layout import Layout
 from rich.text import Text
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
+
+console = Console()
 
 def scrape_transfer_table(
     playwright: Playwright,
@@ -22,6 +29,7 @@ def scrape_transfer_table(
     browser=None,
     context=None,
     page=None,
+    slot_index: int | None = None,
 ) -> None:
     start_time = time.perf_counter()
 
@@ -42,19 +50,25 @@ def scrape_transfer_table(
 
     budget = to_number(raw_budget)
 
+    page.wait_for_selector("#club-name, #competition-name", timeout=20000)
+    team_name = (page.locator("#club-name .club-name-text").first.text_content() or "").strip()
+    league_country = (page.locator("#competition-name").first.text_content() or "").strip()
+
     raw_text = page.locator("a.matchday-title").first.text_content() or ""
     match = re.search(r"\d+", raw_text)
     matchday = int(match.group()) if match else 0
-    # with open("./tmp/league_info.txt", "w") as f:
-    #     f.write(f'Matchday: {matchday}\n')
-    #     f.write(f'Budget: {budget}')
+
+    league_index, _, players_csv_path, league_info_path = get_league_paths(slot_index)
+    save_current_league_index(league_index)
 
     data = {
+        "team_name": team_name,
+        "league_country": league_country,
         "matchday": matchday,
         "budget": budget,
     }
 
-    with open("./tmp/league_info.json", "w", encoding="utf-8") as file:
+    with open(league_info_path, "w", encoding="utf-8") as file:
         json.dump(data, file, indent=4)
 
     # input("Press ENTER to continue after verifying the page has loaded...")
@@ -63,7 +77,7 @@ def scrape_transfer_table(
     # browser.close()
 
     elapsed_time = time.perf_counter() - start_time
-    print(f"Total time elapsed: {elapsed_time:.2f} seconds")
+    console.print(f"[cyan]Total time elapsed: {elapsed_time:.2f} seconds[/cyan]")
 
     link = page.get_by_role("link", name=re.compile(r"^Transfer", re.IGNORECASE)).first
     link.click()
@@ -103,18 +117,26 @@ def scrape_transfer_table(
     with Live(make_layout(), refresh_per_second=10) as live:
         for index, row in enumerate(table_rows):
             cleaned = [cell for cell in row if cell]
-            
-            if len(cleaned) == 9:
+
+            if len(cleaned) >= 9:
+                attack = int(cleaned[4])
+                defense = int(cleaned[5])
+                overall = int(cleaned[6])
+                main_stat = int(cleaned[7])
+                market_value = to_number(cleaned[8]) if len(cleaned) > 8 else 0.0
+
                 player = Player(
                     name=cleaned[0],
                     position=cleaned[1],
                     age=int(cleaned[2]),
-                    nationality=cleaned[3],
-                    club=cleaned[4],
-                    attack=int(cleaned[5]),
-                    defense=int(cleaned[6]),
-                    overall=int(cleaned[7]),
-                    market_value=to_number(cleaned[8])
+                    nationality="",
+                    club=cleaned[3],
+                    attack=attack,
+                    defense=defense,
+                    overall=overall,
+                    main_stat=main_stat,
+                    market_value=float(market_value or 0.0),
+                    base_value=0.0,
                 )
                 
                 # Update TUI message in-place
@@ -152,25 +174,25 @@ def scrape_transfer_table(
 
                 players.append(player)
 
-    # Save to CSV
-    csv_path = Path('./tmp/players_data.csv')
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-    file_exists = csv_path.exists()
+    # Save to the active league-specific CSV
+    players_csv_path.parent.mkdir(parents=True, exist_ok=True)
+    file_exists = players_csv_path.exists()
 
-    with open(csv_path, 'w', newline='', encoding='utf-8') as file:
+    with open(players_csv_path, 'w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
         writer.writerow([
-            transfer_player_headers["NAME"], transfer_player_headers["POSITION"], transfer_player_headers["AGE"], transfer_player_headers["NATIONALITY"],
-            transfer_player_headers["CLUB"], transfer_player_headers["ATTACK"], transfer_player_headers["DEFENSE"], transfer_player_headers["OVERALL"], transfer_player_headers["MARKET_VALUE"], transfer_player_headers["BASE_VALUE"]
+            transfer_player_headers["NAME"], transfer_player_headers["POSITION"], transfer_player_headers["AGE"],
+            transfer_player_headers["CLUB"], transfer_player_headers["ATTACK"], transfer_player_headers["DEFENSE"],
+            transfer_player_headers["OVERALL"], transfer_player_headers["MAIN_STAT"], transfer_player_headers["MARKET_VALUE"], transfer_player_headers["BASE_VALUE"]
         ])
 
         for p in players:
             writer.writerow([
-                p.name, p.position, p.age, p.nationality,
-                p.club, p.attack, p.defense, p.overall, p.market_value, p.base_value
+                p.name, p.position, p.age,
+                p.club, p.attack, p.defense, p.overall, p.main_stat, p.market_value, p.base_value
             ])
 
-    print("CSV successfully written to ./tmp/players_data.csv")
+    console.print(f"[bold green]CSV successfully written to {players_csv_path}[/bold green]")
 
     context.storage_state(path=state_file)
     if context is not None and page is None:
@@ -179,7 +201,7 @@ def scrape_transfer_table(
         browser.close()
 
     elapsed_time = time.perf_counter() - start_time
-    print(f"Total time elapsed: {elapsed_time:.2f} seconds")
+    console.print(f"[cyan]Total time elapsed: {elapsed_time:.2f} seconds[/cyan]")
 
 
 if __name__ == "__main__":
