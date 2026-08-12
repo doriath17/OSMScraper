@@ -1,9 +1,19 @@
+import argparse
 import json
 import time
 from pathlib import Path
 import re
 import csv
-from playwright.sync_api import Playwright, sync_playwright, TimeoutError as PlaywrightTimeoutError
+from typing import Any
+
+try:
+    from playwright.sync_api import Playwright, sync_playwright, TimeoutError as PlaywrightTimeoutError
+except ModuleNotFoundError:
+    Playwright = Any
+    sync_playwright = None
+    class PlaywrightTimeoutError(Exception):
+        pass
+
 from TRParser import TRParser
 from Player import Player, to_number
 from parse_data import (
@@ -30,17 +40,19 @@ def scrape_transfer_table(
     context=None,
     page=None,
     slot_index: int | None = None,
+    headless: bool = False,
 ) -> None:
     start_time = time.perf_counter()
 
     if browser is None:
-        browser = playwright.firefox.launch(headless=False)
+        browser = playwright.firefox.launch(headless=headless)
     if context is None:
         context = browser.new_context(storage_state=state_file)
     if page is None:
         page = context.new_page()
 
     page.goto("https://en.onlinesoccermanager.com/Dashboard", wait_until="domcontentloaded")
+    page.wait_for_load_state("networkidle", timeout=30000)
 
     wallet_locator = page.locator(".wallet-amount span.pull-right").first
     wallet_locator.wait_for(state="visible", timeout=5000)
@@ -81,9 +93,11 @@ def scrape_transfer_table(
 
     link = page.get_by_role("link", name=re.compile(r"^Transfer", re.IGNORECASE)).first
     link.click()
+    page.wait_for_timeout(1500)
+    page.wait_for_load_state("networkidle", timeout=30000)
 
     selector = "table" 
-    page.wait_for_selector(selector)
+    page.wait_for_selector(selector, timeout=30000)
 
     table_html = page.locator(selector).inner_html()
     parser = TRParser()
@@ -150,14 +164,14 @@ def scrape_transfer_table(
                     player_cell.click()
 
                     value_locator = page.locator(".player-profile-value span[data-bind*='currency']:visible").first
-                    value_locator.wait_for(state="visible", timeout=4000)
+                    value_locator.wait_for(state="visible", timeout=8000)
 
                     base_value_raw = value_locator.text_content()
                     base_value = to_number(base_value_raw)
                     player.set_base_value(base_value)
 
                     page.get_by_label("Close").first.click(force=True)
-                    page.wait_for_timeout(300)
+                    page.wait_for_timeout(500)
 
                 except PlaywrightTimeoutError:
                     status_text.plain = f"[Warning] Timeout on {player.name}. Skipping..."
@@ -204,6 +218,32 @@ def scrape_transfer_table(
     console.print(f"[cyan]Total time elapsed: {elapsed_time:.2f} seconds[/cyan]")
 
 
+def _build_argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Scrape the OSM transfer table for a league.")
+    parser.add_argument("--headless", action="store_true", help="Run the browser in headless mode to improve performance.")
+    parser.add_argument("--state-file", default="./tmp/state.json", help="Browser storage state JSON file to reuse.")
+    parser.add_argument("--slot-index", type=int, default=None, help="Optional league slot index to scrape explicitly.")
+    parser.add_argument("--offline", action="store_true", help="Use saved in-memory data without launching the browser.")
+    return parser
+
+
 if __name__ == "__main__":
+    args = _build_argument_parser().parse_args()
+    if sync_playwright is None:
+        console.print("[bold red]Playwright is not installed.[/bold red]")
+        console.print("Install dependencies with: [bold cyan]pip install -r requirements.txt[/bold cyan]")
+        raise SystemExit(1)
+
+    if args.offline:
+        console.print("[yellow]Offline mode: using saved league data without launching the browser.[/yellow]")
+        from parse_data import run_analysis
+        run_analysis()
+        raise SystemExit(0)
+
     with sync_playwright() as playwright:
-        scrape_transfer_table(playwright)
+        scrape_transfer_table(
+            playwright,
+            state_file=args.state_file,
+            slot_index=args.slot_index,
+            headless=args.headless,
+        )

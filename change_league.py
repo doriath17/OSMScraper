@@ -1,6 +1,9 @@
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+try:
+    from playwright.sync_api import sync_playwright
+except ModuleNotFoundError:
+    sync_playwright = None
 
 from parse_data import save_current_league_index
 
@@ -49,6 +52,10 @@ def select_league_slot(page, slot_index=0):
 
 
 def run_change_league(slot_index=0):
+    if sync_playwright is None:
+        print("Playwright is not installed. Install dependencies with: pip install -r requirements.txt")
+        return
+
     if not Path(STATE_FILE).exists():
         print(f"Error: '{STATE_FILE}' not found. Run save_state.py first.")
         return

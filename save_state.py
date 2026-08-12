@@ -1,6 +1,9 @@
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+try:
+    from playwright.sync_api import sync_playwright
+except ModuleNotFoundError:
+    sync_playwright = None
 from rich.console import Console
 
 console = Console()
@@ -8,6 +11,11 @@ STATE_FILE = "./tmp/state.json"
 
 
 def save_session():
+    if sync_playwright is None:
+        console.print("[bold red]Playwright is not installed.[/bold red]")
+        console.print("Install dependencies with: [bold cyan]pip install -r requirements.txt[/bold cyan]")
+        raise SystemExit(1)
+
     with sync_playwright() as p:
         browser = p.firefox.launch(headless=False)
         context = browser.new_context()

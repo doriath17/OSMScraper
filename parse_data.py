@@ -1,5 +1,6 @@
 import csv
 import json
+import re
 from pathlib import Path
 
 from rich import box
@@ -28,6 +29,16 @@ LEAGUE_ROOT_PATH = Path('./tmp/leagues')
 CURRENT_LEAGUE_PATH = Path('./tmp/current_league.json')
 
 
+def build_players_filename(slot_index: int, team_name: str | None = None) -> str:
+    slug = ""
+    if team_name:
+        slug = re.sub(r"[^a-z0-9]+", "_", team_name.lower()).strip("_")
+
+    if slug:
+        return f"league_{slot_index}_{slug}_players.csv"
+    return f"league_{slot_index}_players.csv"
+
+
 def get_current_league_index() -> int:
     if not CURRENT_LEAGUE_PATH.exists():
         return 0
@@ -51,8 +62,17 @@ def get_league_paths(slot_index: int | None = None):
     league_index = int(slot_index) if slot_index is not None else get_current_league_index()
     league_dir = LEAGUE_ROOT_PATH / f'league_{league_index}'
     league_dir.mkdir(parents=True, exist_ok=True)
-    players_csv_path = league_dir / 'players_data.csv'
+
+    team_name = None
     league_info_path = league_dir / 'league_info.json'
+    if league_info_path.exists():
+        try:
+            with open(league_info_path, 'r', encoding='utf-8') as file:
+                team_name = json.load(file).get('team_name')
+        except (json.JSONDecodeError, OSError, TypeError):
+            team_name = None
+
+    players_csv_path = league_dir / build_players_filename(league_index, team_name)
     return league_index, league_dir, players_csv_path, league_info_path
 
 
