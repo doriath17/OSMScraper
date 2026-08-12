@@ -120,8 +120,7 @@ def run(playwright: Playwright) -> None:
 
     with open(csv_path, 'w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
-        if not file_exists:
-            writer.writerow(headers)
+        writer.writerow(headers)
 
         for p in players:
             writer.writerow([
