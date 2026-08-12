@@ -4,7 +4,7 @@ import re
 import csv
 from playwright.sync_api import Playwright, sync_playwright, TimeoutError as PlaywrightTimeoutError
 from TRParser import TRParser
-from Player import Player
+from Player import Player, to_number
 
 # Imports for Rich TUI
 from rich.live import Live
@@ -61,10 +61,20 @@ def run(playwright: Playwright) -> None:
             cleaned = [cell for cell in row if cell]
             
             if len(cleaned) == 9:
-                player = Player(*cleaned)
+                player = Player(
+                    name=cleaned[0],
+                    position=cleaned[1],
+                    age=int(cleaned[2]),
+                    nationality=cleaned[3],
+                    club=cleaned[4],
+                    attack=int(cleaned[5]),
+                    defense=int(cleaned[6]),
+                    overall=int(cleaned[7]),
+                    market_value=to_number(cleaned[8])
+                )
                 
                 # Update TUI message in-place
-                status_text.plain = f"[{index + 1}/{len(table_rows)}] Processing: {player.name} ({player.club})"
+                status_text.plain = f"[{index + 1}/{len(table_rows)}] Processing: {player.name} ({player.position} {player.age} {player.nationality})"
                 status_text.style = "bold green"
                 progress.update(task, completed=index + 1)
                 
@@ -76,7 +86,8 @@ def run(playwright: Playwright) -> None:
                     value_locator = page.locator(".player-profile-value span[data-bind*='currency']:visible").first
                     value_locator.wait_for(state="visible", timeout=4000)
 
-                    base_value = value_locator.text_content()
+                    base_value_raw = value_locator.text_content()
+                    base_value = to_number(base_value_raw)
                     player.set_base_value(base_value)
 
                     page.get_by_label("Close").first.click(force=True)
@@ -107,7 +118,7 @@ def run(playwright: Playwright) -> None:
         'Club', 'Attack', 'Defense', 'Overall', 'Market Value', 'Base Value'
     ]
 
-    with open(csv_path, 'a', newline='', encoding='utf-8') as file:
+    with open(csv_path, 'w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
         if not file_exists:
             writer.writerow(headers)
