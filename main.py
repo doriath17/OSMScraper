@@ -118,7 +118,10 @@ def run_bot(headless: bool = False, offline: bool = False):
                     continue
                 if action == "ra":
                     console.print("[bold green]Running analysis using saved local data...[/bold green]")
-                    run_analysis()
+
+                    slot_index = ask_for_slot_index()
+                    console.print(f"[bold yellow]Running analysis for league slot #{slot_index}...[/bold yellow]")
+                    run_analysis(slot_index)
                     continue
                 if action == "sl":
                     console.print("[bold green]Saved leagues overview:[/bold green]")
@@ -135,8 +138,9 @@ def run_bot(headless: bool = False, offline: bool = False):
                 continue
 
             if action == "ra":
-                console.print("[bold green]Running analysis using the currently loaded player data...[/bold green]")
-                run_analysis()
+                slot_index = ask_for_slot_index()
+                console.print(f"[bold green]Running analysis for league slot #{slot_index}...[/bold green]")
+                run_analysis(slot_index)
                 continue
 
             if action == "stt":

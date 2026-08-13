@@ -186,7 +186,7 @@ if __name__ == "__main__":
     if args.offline:
         console.print("[yellow]Offline mode: using saved league data without launching the browser.[/yellow]")
         from parse_data import run_analysis
-        run_analysis()
+        run_analysis(league_index=args.slot_index or 1)
         raise SystemExit(0)
 
     from feature.routing.BrowserState import launch_browser

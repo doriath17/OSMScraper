@@ -1,3 +1,4 @@
+import argparse
 import csv
 import json
 import re
@@ -127,52 +128,94 @@ def load_league_info(slot_index: int | None = None) -> dict:
         loaded_data = json.load(file)
     return loaded_data
 
-def filter_players(players: list[Player], current_budget: float = 0.0, matchday: int = 1) -> list[Player]:
+def filter_players(players: list[Player], current_budget: float = 0.0, matchday: int = 1, free_slots: int = 1) -> list[Player]:
     if current_budget > 0.0:
         # delete too expensive players
         players = [player for player in players if player.selling_price(matchday=matchday)["price"] <= current_budget]
-    return sorted(players, key=lambda p: p.profit(matchday=matchday), reverse=True)
+    op_budget = operative_budget(current_budget, free_slots=free_slots)
+    return sorted(
+        players,
+        key=lambda p: p.score(matchday=matchday, budget=current_budget, operative_budget=op_budget),
+        reverse=True,
+    )
 
 def analyze_player(player: Player, matchday: int = 1):
     selling_price_info = player.selling_price(matchday=matchday)
     print(f"[{player.name}, {player.position}]: Profit = {player.profit(matchday=matchday):.2f}, Base Value = {player.base_value:.2f}, Selling Price = {selling_price_info['price']:.2f}")
     print(f"  Breakdown: Base Ratio = {selling_price_info['breakdown']['base_ratio']}, Age Modifier = {selling_price_info['breakdown']['age_modifier']}, OVR Modifier = {selling_price_info['breakdown']['ovr_modifier']}, Position Modifier = {selling_price_info['breakdown']['pos_modifier']}")
 
-def build_analysis_table(players: list[Player], matchday: int, limit: int | None = None) -> Table:
+def build_analysis_table(players: list[Player], matchday: int, budget: float, free_slots: int = 1, limit: int | None = None, verbose: bool = False) -> Table:
     visible_players = players if limit is None else players[:limit]
     table = Table(
-        title=f"Top transfer targets for matchday {matchday}",
+        title=f"Top transfer targets by score for matchday {matchday}",
         box=box.SIMPLE_HEAVY,
         header_style="bold cyan",
         show_lines=False,
         expand=True,
     )
 
-    table.add_column("Name", style="bold white", min_width=18)
-    table.add_column("Pos", justify="center", width=6)
-    table.add_column("Age", justify="center", width=5)
-    table.add_column("Club", min_width=18)
-    table.add_column("Main", justify="center", width=6)
-    table.add_column("Base", justify="right", width=8)
-    table.add_column("Market", justify="right", width=10)
-    table.add_column("Sell", justify="right", width=8)
-    table.add_column("Profit", justify="right", width=10)
+    anagraphic_style = "bold white"
+    price_style = "bright_cyan"
+    factors_style = "bright_magenta"
+
+    table.add_column("Name", style=anagraphic_style, min_width=15)
+    table.add_column("Pos", style=anagraphic_style, justify="center", width=6)
+    table.add_column("Age", style=anagraphic_style, justify="center", width=5)
+    table.add_column("Club", style=anagraphic_style, min_width=15)
+    table.add_column("Main", style=anagraphic_style, justify="center", width=6)
+    table.add_column("Base", style=price_style, justify="right", width=7)
+    table.add_column("Market", style=price_style, justify="right", width=7)
+    table.add_column("Sell", style=price_style, justify="right", width=7)
+    table.add_column("Profit", style=price_style, justify="right", width=7)
+
+    if verbose:
+        table.add_column("Z", style=factors_style, justify="right", width=7)
+        table.add_column("Prob", style=factors_style, justify="right", width=7)
+        table.add_column("Est.", style=factors_style, justify="right", width=7)
+        table.add_column("ROCE", style=factors_style, justify="right", width=7)
+        table.add_column("Score", style=factors_style, justify="right", width=7)
+
+    op_budget = operative_budget(budget, free_slots=free_slots)
 
     for player in visible_players:
         sell_price = player.selling_price(matchday=matchday)["price"]
         profit = player.profit(matchday=matchday)
+        z_score = player.z_score(matchday=matchday)
+        prob_sale = player.prob_sale(matchday=matchday)
+        estimated_value = player.exstimated_value(matchday=matchday)
+        roce = player.roce(matchday=matchday)
+        score = player.score(matchday=matchday, budget=budget, operative_budget=op_budget)
         profit_text = f"[red]{profit:.1f}M[/red]" if profit < 0 else f"[green]{profit:.1f}M[/green]"
-        table.add_row(
-            player.name,
-            player.position,
-            str(player.age),
-            player.club,
-            str(player.main_stat),
-            f"{player.base_value:.1f}M",
-            f"{player.market_value:.1f}M",
-            f"{sell_price:.1f}M",
-            profit_text,
-        )
+
+        if verbose:
+            table.add_row(
+                player.name,
+                player.position,
+                str(player.age),
+                player.club,
+                str(player.main_stat),
+                f"{player.base_value:.1f}M",
+                f"{player.market_value:.1f}M",
+                f"{sell_price:.1f}M",
+                profit_text,
+                f"{z_score:.2f}",
+                f"{prob_sale:.0%}",
+                f"{estimated_value:.1f}M",
+                f"{roce:.2f}",
+                f"{score:.1f}",
+            )
+        else:
+            table.add_row(
+                player.name,
+                player.position,
+                str(player.age),
+                player.club,
+                str(player.main_stat),
+                f"{player.base_value:.1f}M",
+                f"{player.market_value:.1f}M",
+                f"{sell_price:.1f}M",
+                profit_text,
+            )
 
     return table
 
@@ -257,19 +300,27 @@ def show_saved_leagues():
     console.print(table)
 
 
-def run_analysis(limit: int | None = None):
+def operative_budget(budget: float, security_deposit: float = 0.0, planned_expenses: float = 0.0, free_slots: int = 1) -> float:
+    """Calculate the operative budget available for player transfers, considering free slots."""
+    return max(0.0, budget - security_deposit - planned_expenses) / max(1, free_slots)
+
+def run_analysis(league_index: int, limit: int | None = None, free_slots: int = 1, verbose: bool = False):
     console = Console()
+    normalized_index = normalize_slot_index(league_index)
+
+    _, _, players_csv_path, league_info_path = get_league_paths(normalized_index)
 
     try:
-        players = load_transfer_players()
-        league_info = load_league_info()
+        players = load_transfer_players(normalized_index)
+        league_info = load_league_info(normalized_index)
     except FileNotFoundError as exc:
-        console.print("[yellow]No saved data found for the current league.[/yellow]")
+        console.print(f"[yellow]No saved data found for league slot #{normalized_index}.[/yellow]")
         console.print(f"[cyan]{exc}[/cyan]")
-        console.print("[cyan]Scrape a league first, or switch to an existing saved league before running analysis.[/cyan]")
+        console.print(f"[cyan]Expected files:[/cyan] {players_csv_path} [cyan]and[/cyan] {league_info_path}")
+        console.print("[cyan]Scrape this league first, then run analysis again.[/cyan]")
         return
     except (json.JSONDecodeError, ValueError, TypeError) as exc:
-        console.print("[red]The saved league data is invalid or incomplete.[/red]")
+        console.print(f"[red]Saved data for league slot #{normalized_index} is invalid or incomplete.[/red]")
         console.print(f"[cyan]{exc}[/cyan]")
         console.print("[cyan]Re-scrape the league or delete the stale files under ./tmp/leagues to continue.[/cyan]")
         return
@@ -277,7 +328,7 @@ def run_analysis(limit: int | None = None):
     matchday = league_info.get("matchday", 0)
     budget = league_info.get("budget", 0.0)
 
-    filtered_players = filter_players(players, current_budget=budget, matchday=matchday)
+    filtered_players = filter_players(players, current_budget=budget, matchday=matchday, free_slots=free_slots)
 
     team_name = league_info.get("team_name", "Unknown team")
     league_country = league_info.get("league_country", "Unknown country")
@@ -289,6 +340,7 @@ def run_analysis(limit: int | None = None):
             f"[bold]League[/bold]: {league_country}\n"
             f"[bold]Matchday[/bold]: {matchday}\n"
             f"[bold]Budget[/bold]: {budget}M\n"
+            f"[bold]Free slots[/bold]: {free_slots}\n"
             f"[bold]Last scraped[/bold]: {scraped_at_local}\n"
             f"[bold]Players loaded[/bold]: {len(players)}\n"
             f"[bold]Visible after filters[/bold]: {len(filtered_players)}",
@@ -301,22 +353,39 @@ def run_analysis(limit: int | None = None):
         console.print("[yellow]No players match the current budget and matchday.[/yellow]")
         return
 
-    console.print(build_analysis_table(filtered_players, matchday=matchday, limit=limit))
+    console.print(build_analysis_table(filtered_players, matchday=matchday, budget=budget, free_slots=free_slots, limit=limit))
 
     console.print("")
     top_player = filtered_players[0]
     sell_price = top_player.selling_price(matchday=matchday)["price"]
     profit_value = top_player.profit(matchday=matchday)
+    estimated_value = top_player.exstimated_value(matchday=matchday)
+    prob_sale = top_player.prob_sale(matchday=matchday)
+    roce = top_player.roce(matchday=matchday)
+    score = top_player.score(matchday=matchday, budget=budget, operative_budget=operative_budget(budget, free_slots=free_slots))
     profit_style = "red" if profit_value < 0 else "green"
     console.print(
         Panel.fit(
             f"[bold]{top_player.name}[/bold] | {top_player.position} | {top_player.club}\n"
             f"Profit: [{profit_style}]{profit_value:.1f}M[/{profit_style}] | "
-            f"Base: {top_player.base_value:.1f}M | Market: {top_player.market_value:.1f}M | Sell: {sell_price:.1f}M",
+            f"Base: {top_player.base_value:.1f}M | Market: {top_player.market_value:.1f}M | Sell: {sell_price:.1f}M\n"
+            f"Estimated value: {estimated_value:.1f}M | Prob. sale: {prob_sale:.0%} | Z-score: {top_player.z_score(matchday=matchday):.2f}\n"
+            f"ROCE: {roce:.2f} | Score: {score:.1f}",
             title="Best current pick",
             border_style="cyan",
         )
     )
 
 if __name__ == "__main__":
-    run_analysis()
+    parser = argparse.ArgumentParser(description="Run analysis for a specific saved league slot.")
+    parser.add_argument("--league-index", type=int, default=1, help="League slot index to analyze (1-based).")
+    parser.add_argument("--limit", type=int, default=None, help="Optional max number of rows to show.")
+    parser.add_argument("--free-slots", type=int, default=1, help="Number of free transfer slots to factor into the score.")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output to see an in depth analysis.")
+
+    args = parser.parse_args()
+    
+    run_analysis(league_index=args.league_index, limit=args.limit, free_slots=args.free_slots, verbose=args.verbose)
+
+# example usage:
+# python parse_data.py --league-index 2 --free-slots 3

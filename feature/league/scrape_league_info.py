@@ -11,7 +11,6 @@ from parse_data import get_league_paths
 
 console = Console()
 
-
 def scrape_league_info(*, browser_state: BrowserState) -> dict[str, Any]:
     """Read and persist league metadata for the currently active dashboard league."""
     page = browser_state.page
