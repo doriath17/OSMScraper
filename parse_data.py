@@ -128,23 +128,45 @@ def load_league_info(slot_index: int | None = None) -> dict:
         loaded_data = json.load(file)
     return loaded_data
 
-def filter_players(players: list[Player], current_budget: float = 0.0, matchday: int = 1, free_slots: int = 1) -> list[Player]:
-    if current_budget > 0.0:
-        # delete too expensive players
-        players = [player for player in players if player.selling_price(matchday=matchday)["price"] <= current_budget]
-    op_budget = operative_budget(current_budget, free_slots=free_slots)
-    return sorted(
-        players,
-        key=lambda p: p.score(matchday=matchday, budget=current_budget, operative_budget=op_budget),
-        reverse=True,
-    )
+def filter_players(
+    players: list[Player], 
+    budget: float, 
+    op_budget: float, 
+    matchday: int = 1, 
+) -> list[Player]:
+    """
+    Filtra e ordina una lista di giocatori selezionando i migliori candidati 
+    in base allo score di vendita generato dall'algoritmo.
+    
+    :param players: Lista degli oggetti Player da valutare.
+    :param budget: Budget totale disponibile.
+    :param op_budget: Budget operativo riservato al mercato rapido.
+    :param matchday: Giornata di campionato corrente.
+    :param free_slots: Numero massimo di giocatori da restituire (slot rosa liberi).
+    :return: Lista dei primi 'free_slots' giocatori con lo score più alto.
+    """
+    valid_candidates = []
 
-def analyze_player(player: Player, matchday: int = 1):
-    selling_price_info = player.selling_price(matchday=matchday)
-    print(f"[{player.name}, {player.position}]: Profit = {player.profit(matchday=matchday):.2f}, Base Value = {player.base_value:.2f}, Selling Price = {selling_price_info['price']:.2f}")
-    print(f"  Breakdown: Base Ratio = {selling_price_info['breakdown']['base_ratio']}, Age Modifier = {selling_price_info['breakdown']['age_modifier']}, OVR Modifier = {selling_price_info['breakdown']['ovr_modifier']}, Position Modifier = {selling_price_info['breakdown']['pos_modifier']}")
+    for player in players:
+        # Vincolo di acquistabilità: il costo di acquisto (market_value) 
+        # non deve superare il budget operativo o totale disponibile
+        if player.market_value <= op_budget and player.market_value <= budget:
+            # Calcoliamo il prezzo di vendita ottimale e lo score
+            sp_info = player.selling_price(
+                budget=budget, 
+                operative_budget=op_budget, 
+                matchday=matchday
+            )
+            
+            # Salviamo la tupla (player, score) per l'ordinamento
+            valid_candidates.append((player, sp_info["score"]))
 
-def build_analysis_table(players: list[Player], matchday: int, budget: float, free_slots: int = 1, limit: int | None = None, verbose: bool = False) -> Table:
+    # Ordiniamo i giocatori in ordine decrescente di score (dal migliore al peggiore)
+    valid_candidates.sort(key=lambda item: item[1], reverse=True)
+
+    return [player for player, score in valid_candidates]
+
+def build_analysis_table(players: list[Player], matchday: int, budget: float, op_budget: float, limit: int | None = None, verbose: bool = False) -> Table:
     visible_players = players if limit is None else players[:limit]
     table = Table(
         title=f"Top transfer targets by score for matchday {matchday}",
@@ -166,6 +188,7 @@ def build_analysis_table(players: list[Player], matchday: int, budget: float, fr
     table.add_column("Base", style=price_style, justify="right", width=7)
     table.add_column("Market", style=price_style, justify="right", width=7)
     table.add_column("Sell", style=price_style, justify="right", width=7)
+    table.add_column("Max Value", style=price_style, justify="right", width=7)
     table.add_column("Profit", style=price_style, justify="right", width=7)
 
     if verbose:
@@ -175,17 +198,32 @@ def build_analysis_table(players: list[Player], matchday: int, budget: float, fr
         table.add_column("ROCE", style=factors_style, justify="right", width=7)
         table.add_column("Score", style=factors_style, justify="right", width=7)
 
-    op_budget = operative_budget(budget, free_slots=free_slots)
-
     for player in visible_players:
-        sell_price = player.selling_price(matchday=matchday)["price"]
-        profit = player.profit(matchday=matchday)
-        z_score = player.z_score(matchday=matchday)
-        prob_sale = player.prob_sale(matchday=matchday)
-        estimated_value = player.exstimated_value(matchday=matchday)
-        roce = player.roce(matchday=matchday)
-        score = player.score(matchday=matchday, budget=budget, operative_budget=op_budget)
-        profit_text = f"[red]{profit:.1f}M[/red]" if profit < 0 else f"[green]{profit:.1f}M[/green]"
+        sp_result = player.selling_price(
+            budget=budget, 
+            operative_budget=op_budget, 
+            matchday=matchday
+        )
+
+        # 2. Estrazione del prezzo e dei dettagli parziali già calcolati per quel prezzo ottimale
+        sell_price = sp_result["price"]
+        details = sp_result["details"]
+
+        profit_value = details["profit"]
+        estimated_value = details["ev"]
+        prob_sale = details["p_sale"]
+        roce = details["roce"]
+        score = details["final_score"]
+        z_score = details["z_score"]
+
+        # sell_price = player.selling_price(matchday=matchday)["price"]
+        # profit = player.profit(matchday=matchday)
+        # z_score = player.z_score(matchday=matchday)
+        # prob_sale = player.prob_sale(matchday=matchday)
+        # estimated_value = player.exstimated_value(matchday=matchday)
+        # roce = player.roce(matchday=matchday)
+        # score = player.score(matchday=matchday, budget=budget, operative_budget=op_budget)
+        profit_text = f"[red]{profit_value:.1f}M[/red]" if profit_value < 0 else f"[green]{profit_value:.1f}M[/green]"
 
         if verbose:
             table.add_row(
@@ -197,6 +235,7 @@ def build_analysis_table(players: list[Player], matchday: int, budget: float, fr
                 f"{player.base_value:.1f}M",
                 f"{player.market_value:.1f}M",
                 f"{sell_price:.1f}M",
+                f"{player.max_price()}M",
                 profit_text,
                 f"{z_score:.2f}",
                 f"{prob_sale:.0%}",
@@ -214,6 +253,7 @@ def build_analysis_table(players: list[Player], matchday: int, budget: float, fr
                 f"{player.base_value:.1f}M",
                 f"{player.market_value:.1f}M",
                 f"{sell_price:.1f}M",
+                f"{player.max_price()}M",
                 profit_text,
             )
 
@@ -304,7 +344,7 @@ def operative_budget(budget: float, security_deposit: float = 0.0, planned_expen
     """Calculate the operative budget available for player transfers, considering free slots."""
     return max(0.0, budget - security_deposit - planned_expenses) / max(1, free_slots)
 
-def run_analysis(league_index: int, limit: int | None = None, free_slots: int = 1, verbose: bool = False):
+def run_analysis(league_index: int, limit: int | None = None, security_deposit: float = 0.0, planned_expenses: float = 0.0, free_slots: int = 1, verbose: bool = False):
     console = Console()
     normalized_index = normalize_slot_index(league_index)
 
@@ -328,7 +368,9 @@ def run_analysis(league_index: int, limit: int | None = None, free_slots: int = 
     matchday = league_info.get("matchday", 0)
     budget = league_info.get("budget", 0.0)
 
-    filtered_players = filter_players(players, current_budget=budget, matchday=matchday, free_slots=free_slots)
+    op_budget = operative_budget(budget, security_deposit=security_deposit, planned_expenses=planned_expenses, free_slots=free_slots)
+
+    filtered_players = filter_players(players, budget=budget, op_budget=op_budget, matchday=matchday)
 
     team_name = league_info.get("team_name", "Unknown team")
     league_country = league_info.get("league_country", "Unknown country")
@@ -353,23 +395,33 @@ def run_analysis(league_index: int, limit: int | None = None, free_slots: int = 
         console.print("[yellow]No players match the current budget and matchday.[/yellow]")
         return
 
-    console.print(build_analysis_table(filtered_players, matchday=matchday, budget=budget, free_slots=free_slots, limit=limit))
+    console.print(build_analysis_table(filtered_players, matchday=matchday, budget=budget, op_budget=op_budget, limit=limit, verbose=verbose))
 
     console.print("")
     top_player = filtered_players[0]
-    sell_price = top_player.selling_price(matchday=matchday)["price"]
-    profit_value = top_player.profit(matchday=matchday)
-    estimated_value = top_player.exstimated_value(matchday=matchday)
-    prob_sale = top_player.prob_sale(matchday=matchday)
-    roce = top_player.roce(matchday=matchday)
-    score = top_player.score(matchday=matchday, budget=budget, operative_budget=operative_budget(budget, free_slots=free_slots))
+    # 1. Una sola chiamata a selling_price passando i parametri richiesti
+    sp_result = top_player.selling_price(
+        budget=budget, 
+        operative_budget=op_budget, 
+        matchday=matchday
+    )
+
+    # 2. Estrazione del prezzo e dei dettagli parziali già calcolati per quel prezzo ottimale
+    sell_price = sp_result["price"]
+    details = sp_result["details"]
+
+    profit_value = details["profit"]
+    estimated_value = details["ev"]
+    prob_sale = details["p_sale"]
+    roce = details["roce"]
+    score = details["final_score"]
     profit_style = "red" if profit_value < 0 else "green"
     console.print(
         Panel.fit(
             f"[bold]{top_player.name}[/bold] | {top_player.position} | {top_player.club}\n"
             f"Profit: [{profit_style}]{profit_value:.1f}M[/{profit_style}] | "
             f"Base: {top_player.base_value:.1f}M | Market: {top_player.market_value:.1f}M | Sell: {sell_price:.1f}M\n"
-            f"Estimated value: {estimated_value:.1f}M | Prob. sale: {prob_sale:.0%} | Z-score: {top_player.z_score(matchday=matchday):.2f}\n"
+            f"Estimated value: {estimated_value:.1f}M | Prob. sale: {prob_sale:.0%} | Z-score: {details["z_score"]:.2f}\n"
             f"ROCE: {roce:.2f} | Score: {score:.1f}",
             title="Best current pick",
             border_style="cyan",
