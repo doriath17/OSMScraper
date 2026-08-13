@@ -10,6 +10,7 @@ console = Console()
 
 class BrowserState: 
     def __init__(self, browser, context, page):
+        # the browser is guaranteed to be a valid Playwright browser instance, context is a valid browser context, and page is a valid page instance
         if browser is None or context is None or page is None:
             print("[bold red]Error: Browser, context, and page must all be provided to initialize BrowserState.[/bold red]")
             raise SystemExit(1)
@@ -20,6 +21,8 @@ class BrowserState:
 
     def is_initialized(self) -> bool:
         return self.browser is not None and self.context is not None and self.page is not None
+
+    # TODO: implement set methods to avoid None values being set after initialization, or make the attributes read-only after initialization
 
 def launch_browser(playwright, headless: bool = False, state_filename: str = "./tmp/state.json") -> BrowserState:
     if not Path(state_filename).exists():

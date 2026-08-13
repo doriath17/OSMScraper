@@ -10,7 +10,8 @@ from feature.routing.league_selection import open_league_selection, select_leagu
 from interactive_player import main as run_interactive_player
 from parse_data import get_saved_leagues, run_analysis, show_saved_leagues
 from save_state import login_session, logout_session, save_context_state
-from save_transfer_table import scrape_transfer_table
+from feature.league.scrape_transfer_table import scrape_transfer_table
+
 
 console = Console()
 
@@ -140,13 +141,7 @@ def run_bot(headless: bool = False, offline: bool = False):
 
             if action == "stt":
                 console.print("[bold green]Scraping transfer table and saving the league context...[/bold green]")
-                scrape_transfer_table(
-                    playwright,
-                    state_file=STATE_FILE,
-                    browser=browser_state.browser,
-                    context=browser_state.context,
-                    page=browser_state.page,
-                )
+                scrape_transfer_table(browser_state=browser_state)
                 continue
 
             if action == "goto sl":
@@ -155,9 +150,12 @@ def run_bot(headless: bool = False, offline: bool = False):
 
             if action == "sl":
                 print_current_league_context(browser_state.page)
+                
                 slot_index = ask_for_slot_index()
                 console.print(f"[bold yellow]Changing to league slot #{slot_index}...[/bold yellow]")
+
                 select_league(browser_state, slot_index)
+
                 print_current_league_context(browser_state.page)
                 console.print(f"[bold green]League slot #{slot_index} selected.[/bold green]")
                 console.print("[cyan]You are now on the league page. Choose your next action from the dashboard.[/cyan]")

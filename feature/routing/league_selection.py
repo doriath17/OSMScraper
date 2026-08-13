@@ -11,6 +11,7 @@ from rich.console import Console
 console = Console()
 
 from feature.routing.BrowserState import BrowserState
+from feature.league.scrape_league_info import scrape_league_info
 
 def open_league_selection(browser_state: BrowserState):
     console.print("[bold green]Opening career/league selection...[/bold green]")
@@ -61,3 +62,5 @@ def select_league(browser_state: BrowserState, slot_index=1):
     home_link.click()
     page.wait_for_url("**/Dashboard", timeout=20000)
     page.wait_for_load_state("domcontentloaded", timeout=20000)
+
+    scrape_league_info(browser_state=browser_state)

@@ -71,15 +71,11 @@ def prompt_interactive():
             break
         console.print("[red]Market value cannot be negative.[/red]")
 
-    matchday = get_saved_matchday()
-    if matchday is None:
-        while True:
-            matchday = IntPrompt.ask("Matchday", default=1)
-            if matchday >= 1:
-                break
-            console.print("[red]Matchday must be at least 1.[/red]")
-    else:
-        console.print(f"[green]Using saved matchday: {matchday}[/green]")
+    while True: 
+        matchday = IntPrompt.ask("Matchday", default=get_saved_matchday() or 0)
+        if matchday >= 0:
+            break
+        console.print("[red]Matchday must be a positive integer.[/red]")
 
     return pos, age, main_stat, base_value, market_value, matchday
 

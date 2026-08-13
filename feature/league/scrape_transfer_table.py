@@ -1,11 +1,10 @@
 import argparse
-import json
 import time
-from datetime import datetime, timezone
-from pathlib import Path
 import re
 import csv
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
+
+from feature.routing.BrowserState import BrowserState
 
 if TYPE_CHECKING:
     from playwright.sync_api import Playwright
@@ -21,7 +20,6 @@ from TRParser import TRParser
 from Player import Player, to_number
 from parse_data import (
     get_league_paths,
-    save_current_league_index,
     transfer_player_headers,
 )
 
@@ -35,69 +33,19 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeEl
 
 console = Console()
 
+# NOTE: this scraper assumes: 
+# 1. The user is already logged in and has a valid session.
+# 2. The user is on the dashboard page of the OSM website 
+#       This means the user navigated to the dashboard league through the main loop
 def scrape_transfer_table(
-    playwright: Any,
     *,
-    state_file: str = "./tmp/state.json",
-    browser=None,
-    context=None,
-    page=None,
-    slot_index: int | None = None,
-    headless: bool = False,
+    browser_state: BrowserState,
 ) -> None:
     start_time = time.perf_counter()
 
-    if browser is None:
-        browser = playwright.firefox.launch(headless=headless)
-    if context is None:
-        context = browser.new_context(storage_state=state_file)
-    if page is None:
-        page = context.new_page()
+    page = browser_state.page
 
-    page.goto("https://en.onlinesoccermanager.com/Dashboard", wait_until="domcontentloaded")
-    page.wait_for_load_state("networkidle", timeout=30000)
-
-    wallet_locator = page.locator(".wallet-amount span.pull-right").first
-    wallet_locator.wait_for(state="visible", timeout=5000)
-
-    raw_budget = wallet_locator.text_content() or ""
-    raw_budget = raw_budget.strip()  # "10.6M"
-
-    budget = to_number(raw_budget)
-
-    page.wait_for_selector("#club-name, #competition-name", timeout=20000)
-    team_name = (page.locator("#club-name .club-name-text").first.text_content() or "").strip()
-    league_country = (page.locator("#competition-name").first.text_content() or "").strip()
-
-    raw_text = page.locator("a.matchday-title").first.text_content() or ""
-    match = re.search(r"\d+", raw_text)
-    matchday = int(match.group()) if match else 0
-
-    league_index, _, players_csv_path, league_info_path = get_league_paths(slot_index)
-    save_current_league_index(league_index)
-
-    scraped_at_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    scraped_at_local = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    data = {
-        "league_index": league_index,
-        "team_name": team_name,
-        "league_country": league_country,
-        "matchday": matchday,
-        "budget": budget,
-        "scraped_at": scraped_at_utc,
-        "scraped_at_local": scraped_at_local,
-    }
-
-    with open(league_info_path, "w", encoding="utf-8") as file:
-        json.dump(data, file, indent=4)
-
-    # input("Press ENTER to continue after verifying the page has loaded...")
-    # context.storage_state(path="./tmp/state.json")
-    # context.close()
-    # browser.close()
-
-    elapsed_time = time.perf_counter() - start_time
-    console.print(f"[cyan]Total time elapsed: {elapsed_time:.2f} seconds[/cyan]")
+    _, _, players_csv_path, _ = get_league_paths()
 
     link = page.get_by_role("link", name=re.compile(r"^Transfer", re.IGNORECASE)).first
     link.click()
@@ -198,7 +146,6 @@ def scrape_transfer_table(
 
     # Save to the active league-specific CSV
     players_csv_path.parent.mkdir(parents=True, exist_ok=True)
-    file_exists = players_csv_path.exists()
 
     with open(players_csv_path, 'w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
@@ -215,12 +162,6 @@ def scrape_transfer_table(
             ])
 
     console.print(f"[bold green]CSV successfully written to {players_csv_path}[/bold green]")
-
-    context.storage_state(path=state_file)
-    if context is not None and page is None:
-        context.close()
-    if browser is not None and page is None:
-        browser.close()
 
     elapsed_time = time.perf_counter() - start_time
     console.print(f"[cyan]Total time elapsed: {elapsed_time:.2f} seconds[/cyan]")
@@ -248,10 +189,17 @@ if __name__ == "__main__":
         run_analysis()
         raise SystemExit(0)
 
+    from feature.routing.BrowserState import launch_browser
+    from feature.routing.league_selection import open_league_selection, select_league
+
     with sync_playwright() as playwright:
-        scrape_transfer_table(
-            playwright,
-            state_file=args.state_file,
-            slot_index=args.slot_index,
-            headless=args.headless,
-        )
+        browser_state = launch_browser(playwright, headless=args.headless, state_filename=args.state_file)
+        if args.slot_index is not None:
+            open_league_selection(browser_state)
+            select_league(browser_state, args.slot_index)
+        else:
+            browser_state.page.goto("https://en.onlinesoccermanager.com/")
+        try:
+            scrape_transfer_table(browser_state=browser_state)
+        finally:
+            browser_state.browser.close()
