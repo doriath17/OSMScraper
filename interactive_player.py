@@ -55,9 +55,9 @@ def prompt_interactive():
 
     while True:
         main_stat = IntPrompt.ask("Main stat", default=82)
-        if 0 <= main_stat <= 100:
+        if 0 <= main_stat <= 200:
             break
-        console.print("[red]Main stat must be between 0 and 100.[/red]")
+        console.print("[red]Main stat must be between 0 and 200.[/red]")
 
     while True:
         base_value = FloatPrompt.ask("Base value in millions", default=12.5)

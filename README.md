@@ -117,12 +117,11 @@ When the browser is open, the menu also shows:
 1. Run analysis
 2. Scrape transfer table
 3. Change league
-4. Login
-5. Logout
-6. Show saved leagues
-7. Interactive player calculator
-8. Close browser
-9. Quit
+4. Save state
+5. Show saved leagues
+6. Interactive player calculator
+7. Close browser
+8. Quit
 
 ## Browser lifecycle and offline mode
 

@@ -132,6 +132,9 @@ def get_pressure(delta: float, min_pressure: int = 25, max_pressure: int = 75) -
 # +16.0   | 0.872  | 0.372       | 68.6      | 69.2         | 68.6      | Off. Forte
 # ==============================================================================
 
+
+# $$T(k_1) = T_{\text{base}} + 40 \cdot \vert{}k_1 - 0.5\vert{}^\eta$$Se $\eta = 1.0$, la crescita è lineare rispetto alla deviazione.Se $\eta < 1.0$ (es. $0.7$), il tempo sale molto più velocemente appena ci si allontana dall'equilibrio (utile per garantire che in svantaggio si passi subito a ritmi di contropiede alti $\ge 68$).$\Delta = 0 \implies k_1 = 0.50 \implies T = 55$$\Delta = -12 \implies k_1 = 0.19 \implies \vert{}0.19 - 0.50\vert{} = 0.31 \implies T \approx 72$$\Delta = +12 \implies k_1 = 0.81 \implies \vert{}0.81 - 0.50\vert{} = 0.31 \implies T \approx 72$Pro: Mantiene la coerenza matematica dell'intero modello basandosi esclusivamente sul fattore $k_1$.
+
 def get_tempo(k1: float, t_base: float = 50.0, max_boost: float = 40.0, eta: float = 0.75) -> float: # Definisce il calcolo del Tempo tramite scostamento da k1.
     deviation = abs(k1 - 0.5) # Calcola la distanza assoluta tra k1 e il punto neutro 0.50.
     return round(t_base + max_boost * (deviation ** eta), 1) # Restituisce il valore del Tempo arrotondato a un decimale.

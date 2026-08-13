@@ -10,11 +10,21 @@ console = Console()
 STATE_FILE = "./tmp/state.json"
 
 
+def save_context_state(context, state_file=STATE_FILE):
+    state_path = Path(state_file)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    context.storage_state(path=str(state_path))
+    console.print(f"[bold green]--> Session saved to {state_file}.[/bold green]")
+
+
 def save_session():
     if sync_playwright is None:
         console.print("[bold red]Playwright is not installed.[/bold red]")
         console.print("Install dependencies with: [bold cyan]pip install -r requirements.txt[/bold cyan]")
         raise SystemExit(1)
+
+    state_path = Path(STATE_FILE)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
 
     with sync_playwright() as p:
         browser = p.firefox.launch(headless=False)
@@ -26,8 +36,7 @@ def save_session():
         console.print("[bold yellow]--> Please complete the login and email verification in the Firefox browser.[/bold yellow]")
         input("--> Once fully logged in, press ENTER here in the terminal to save session...")
 
-        context.storage_state(path=STATE_FILE)
-        console.print(f"[bold green]--> Session saved to {STATE_FILE}.[/bold green]")
+        save_context_state(context, STATE_FILE)
         browser.close()
 
 

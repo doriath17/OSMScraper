@@ -138,7 +138,8 @@ def analyze_player(player: Player, matchday: int = 1):
     print(f"[{player.name}, {player.position}]: Profit = {player.profit(matchday=matchday):.2f}, Base Value = {player.base_value:.2f}, Selling Price = {selling_price_info['price']:.2f}")
     print(f"  Breakdown: Base Ratio = {selling_price_info['breakdown']['base_ratio']}, Age Modifier = {selling_price_info['breakdown']['age_modifier']}, OVR Modifier = {selling_price_info['breakdown']['ovr_modifier']}, Position Modifier = {selling_price_info['breakdown']['pos_modifier']}")
 
-def build_analysis_table(players: list[Player], matchday: int, limit: int = 10) -> Table:
+def build_analysis_table(players: list[Player], matchday: int, limit: int | None = None) -> Table:
+    visible_players = players if limit is None else players[:limit]
     table = Table(
         title=f"Top transfer targets for matchday {matchday}",
         box=box.SIMPLE_HEAVY,
@@ -157,7 +158,7 @@ def build_analysis_table(players: list[Player], matchday: int, limit: int = 10) 
     table.add_column("Sell", justify="right", width=8)
     table.add_column("Profit", justify="right", width=10)
 
-    for player in players[:limit]:
+    for player in visible_players:
         sell_price = player.selling_price(matchday=matchday)["price"]
         profit = player.profit(matchday=matchday)
         profit_text = f"[red]{profit:.1f}M[/red]" if profit < 0 else f"[green]{profit:.1f}M[/green]"
@@ -256,7 +257,7 @@ def show_saved_leagues():
     console.print(table)
 
 
-def run_analysis(limit: int = 10):
+def run_analysis(limit: int | None = None):
     console = Console()
 
     try:
