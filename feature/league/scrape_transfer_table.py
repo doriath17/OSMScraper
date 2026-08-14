@@ -4,7 +4,9 @@ import re
 import csv
 from typing import TYPE_CHECKING
 
+from Player import Player
 from feature.routing.BrowserState import BrowserState
+from model.utils import to_number
 
 if TYPE_CHECKING:
     from playwright.sync_api import Playwright
@@ -17,7 +19,6 @@ except ModuleNotFoundError:
     PlaywrightTimeoutError = TimeoutError
 
 from TRParser import TRParser
-from Player import Player, to_number
 from parse_data import (
     get_league_paths,
     transfer_player_headers,
@@ -33,24 +34,19 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeEl
 
 console = Console()
 
-# NOTE: this scraper assumes: 
-# 1. The user is already logged in and has a valid session.
-# 2. The user is on the dashboard page of the OSM website 
-#       This means the user navigated to the dashboard league through the main loop
 def scrape_transfer_table(
     *,
     browser_state: BrowserState,
 ) -> None:
+    """Scrape the transfer table for the current league.
+    This function assumes the user is already logged in and on the transfer page of the OSM website."""
     start_time = time.perf_counter()
+
+    console.print("[bold cyan]--> Scraping transfer table...[/bold cyan]")
 
     page = browser_state.page
 
-    _, _, players_csv_path, _ = get_league_paths()
-
-    link = page.get_by_role("link", name=re.compile(r"^Transfer", re.IGNORECASE)).first
-    link.click()
-    page.wait_for_timeout(1500)
-    page.wait_for_load_state("networkidle", timeout=30000)
+    _, _, players_csv_path, _, _ = get_league_paths()
 
     selector = "table" 
     page.wait_for_selector(selector, timeout=30000)
@@ -143,6 +139,9 @@ def scrape_transfer_table(
                     status_text.style = "bold red"
 
                 players.append(player)
+
+    console.print(f"[bold green]--> Scraping completed. {len(players)} players processed.[/bold green]")
+    console.print(f"[bold cyan]--> Saving to CSV: {players_csv_path}[/bold cyan]")
 
     # Save to the active league-specific CSV
     players_csv_path.parent.mkdir(parents=True, exist_ok=True)

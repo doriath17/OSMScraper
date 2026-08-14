@@ -6,7 +6,7 @@ from typing import Any
 from rich.console import Console
 
 from feature.routing.BrowserState import BrowserState
-from Player import to_number
+from model.utils import to_number
 from parse_data import get_league_paths
 
 console = Console()
@@ -31,7 +31,7 @@ def scrape_league_info(*, browser_state: BrowserState) -> dict[str, Any]:
     match = re.search(r"\d+", raw_text)
     matchday = int(match.group()) if match else 0
 
-    league_index, _, _, league_info_path = get_league_paths()
+    league_index, _, _, _, league_info_path = get_league_paths()
     scraped_at_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     scraped_at_local = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 

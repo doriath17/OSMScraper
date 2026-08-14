@@ -5,6 +5,9 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 
 from change_league import STATE_FILE
+from feature.league.scrape_league_info import scrape_league_info
+from feature.league.transfer_history_scraper import scrape_transfer_history
+from feature.league.transfer_page import open_transfer_page
 from feature.routing.BrowserState import BrowserState, launch_browser
 from feature.routing.league_selection import open_league_selection, select_league
 from interactive_player import main as run_interactive_player
@@ -55,16 +58,19 @@ def prompt_action(browser_open: bool):
     else:
         options = [
             "[bold cyan]ra[/bold cyan]) Run analysis\n"
-            "[bold cyan]stt[/bold cyan]) Scrape transfer table\n"
-            "[bold cyan]goto sl[/bold cyan]) Goto Select League\n"
             "[bold cyan]sl[/bold cyan]) Select League\n"
+            "[bold cyan]gtp[/bold cyan]) Go to Transfer page\n"
+            "[bold cyan]stt[/bold cyan]) Scrape transfer table\n"
+            "[bold cyan]sth[/bold cyan]) Scrape transfer history\n"
+            "[bold cyan]goto sl[/bold cyan]) Goto Select League\n"
             "[bold cyan]ss[/bold cyan]) Save state\n"
+            "[bold cyan]sv li[/bold cyan]) Save League Info\n"
             "[bold cyan]show sl[/bold cyan]) Show saved leagues\n"
             "[bold cyan]ipc[/bold cyan]) Interactive player calculator\n"
             "[bold cyan]cb[/bold cyan]) Close browser\n"
             "[bold cyan]q[/bold cyan]) Quit",
         ]
-        choices = ["ra", "stt", "goto sl", "ss", "sl", "show sl", "ipc", "cb", "q"]
+        choices = ["ra", "gtp", "stt", "sth", "ss", "sv li", "sl", "show sl", "ipc", "cb", "q"]
 
     console.print(Panel.fit("".join(options), title="OSM Manager", border_style="green"))
     return Prompt.ask("Choose an option", choices=choices).strip()
@@ -143,9 +149,16 @@ def run_bot(headless: bool = False, offline: bool = False):
                 run_analysis(slot_index)
                 continue
 
+            if action == "gtp":
+                open_transfer_page(browser_state)
+                continue
+
             if action == "stt":
-                console.print("[bold green]Scraping transfer table and saving the league context...[/bold green]")
                 scrape_transfer_table(browser_state=browser_state)
+                continue
+
+            if action == "sth":
+                scrape_transfer_history(browser_state=browser_state, load_more=True)
                 continue
 
             if action == "goto sl":
@@ -163,6 +176,12 @@ def run_bot(headless: bool = False, offline: bool = False):
                 print_current_league_context(browser_state.page)
                 console.print(f"[bold green]League slot #{slot_index} selected.[/bold green]")
                 console.print("[cyan]You are now on the league page. Choose your next action from the dashboard.[/cyan]")
+                continue
+
+            if action == "sv li":
+                console.print("[bold green]Saving current league info...[/bold green]")
+                scrape_league_info(browser_state=browser_state)
+                console.print("[bold green]League info saved successfully.[/bold green]")
                 continue
 
             if action == "ss":

@@ -33,6 +33,9 @@ CURRENT_LEAGUE_PATH = Path('./tmp/current_league.json')
 def build_players_filename(slot_index: int, team_name: str | None = None) -> str:
     return f"league_{slot_index}_players.csv"
 
+def build_transfer_history_filename(slot_index: int, team_name: str | None = None) -> str:
+    return f"league_{slot_index}_transfer_history.csv"
+
 
 def normalize_slot_index(slot_index: int | None) -> int:
     if slot_index is None:
@@ -79,11 +82,12 @@ def get_league_paths(slot_index: int | None = None):
             team_name = None
 
     players_csv_path = league_dir / build_players_filename(league_index, team_name)
-    return league_index, league_dir, players_csv_path, league_info_path
+    transfer_history_csv_path = league_dir / build_transfer_history_filename(league_index, team_name)
+    return league_index, league_dir, players_csv_path, transfer_history_csv_path, league_info_path
 
 
 def load_transfer_players(slot_index: int | None = None) -> list[Player]:
-    _, _, csv_file, _ = get_league_paths(slot_index)
+    _, _, csv_file, _, _ = get_league_paths(slot_index)
     if not csv_file.exists():
         raise FileNotFoundError(f"CSV file not found: {csv_file}")
 
@@ -120,7 +124,7 @@ def load_transfer_players(slot_index: int | None = None) -> list[Player]:
 
 
 def load_league_info(slot_index: int | None = None) -> dict:
-    _, _, _, league_info_path = get_league_paths(slot_index)
+    _, _, _, _, league_info_path  = get_league_paths(slot_index)
     if not league_info_path.exists():
         raise FileNotFoundError(f"League info file not found: {league_info_path}")
 
@@ -344,11 +348,11 @@ def operative_budget(budget: float, security_deposit: float = 0.0, planned_expen
     """Calculate the operative budget available for player transfers, considering free slots."""
     return max(0.0, budget - security_deposit - planned_expenses) / max(1, free_slots)
 
-def run_analysis(league_index: int, limit: int | None = None, security_deposit: float = 0.0, planned_expenses: float = 0.0, free_slots: int = 1, verbose: bool = False):
+def run_analysis(league_index: int, limit: int | None = None, security_deposit: float = 0.0, planned_expenses: float = 0.0, free_slots: int = 1, verbose: bool = False, matchday_arg: int | None = None, budget_arg: float | None = None):
     console = Console()
     normalized_index = normalize_slot_index(league_index)
 
-    _, _, players_csv_path, league_info_path = get_league_paths(normalized_index)
+    _, _, players_csv_path, _, league_info_path = get_league_paths(normalized_index)
 
     try:
         players = load_transfer_players(normalized_index)
@@ -365,11 +369,14 @@ def run_analysis(league_index: int, limit: int | None = None, security_deposit: 
         console.print("[cyan]Re-scrape the league or delete the stale files under ./tmp/leagues to continue.[/cyan]")
         return
 
-    matchday = league_info.get("matchday", 0)
-    budget = league_info.get("budget", 0.0)
+    matchday_stored = league_info.get("matchday", 0)
+    matchday = matchday_arg if matchday_arg is not None else matchday_stored
+    budget_stored = league_info.get("budget", 0.0)
+    budget = budget_arg if budget_arg is not None else budget_stored
 
     op_budget = operative_budget(budget, security_deposit=security_deposit, planned_expenses=planned_expenses, free_slots=free_slots)
 
+    console.print(f"[cyan]Using matchday {matchday} and budget {budget:.1f}M (operative budget: {op_budget:.1f}M) for analysis.[/cyan]")
     filtered_players = filter_players(players, budget=budget, op_budget=op_budget, matchday=matchday)
 
     team_name = league_info.get("team_name", "Unknown team")
@@ -434,10 +441,12 @@ if __name__ == "__main__":
     parser.add_argument("--limit", type=int, default=None, help="Optional max number of rows to show.")
     parser.add_argument("--free-slots", type=int, default=1, help="Number of free transfer slots to factor into the score.")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output to see an in depth analysis.")
+    parser.add_argument("--matchday", type=int, default=None, help="Optional Matchday specifier")
+    parser.add_argument("--budget", type=float, default=None, help="Optional Budget specifier")
 
     args = parser.parse_args()
     
-    run_analysis(league_index=args.league_index, limit=args.limit, free_slots=args.free_slots, verbose=args.verbose)
+    run_analysis(league_index=args.league_index, limit=args.limit, free_slots=args.free_slots, verbose=args.verbose, matchday_arg=args.matchday, budget_arg=args.budget)
 
 # example usage:
-# python parse_data.py --league-index 2 --free-slots 3
+# clear; python parse_data.py --league-index 2 --free-slots 1 --verbose --limit 10 --matchday 3

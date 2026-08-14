@@ -1,62 +1,12 @@
-# # ['Haaland', '', 'ST', '26', 'Manchester City', '99', '18', '58', '99', '44.6M']
-
-from enum import Enum
+import math
+from model.PlayerPosition import get_position
+from model.PlayerRole import PlayerRole, get_role
 import math
 
-class PlayerPosition(str, Enum): 
-    ST = 'ST'
-    LW = 'LW'
-    RW = 'RW'
-    CF = 'CF'
-    CAM = 'CAM'
-    CM = 'CM'
-    CDM = 'CDM'
-    LM = 'LM'
-    RM = 'RM'
-    CB = 'CB'
-    LB = 'LB'
-    RB = 'RB'
-    GK = 'GK'
-
-def get_position(pos: str) -> PlayerPosition:
-    pos = pos.upper()
-    match pos:
-        case "ST": return PlayerPosition.ST
-        case "LW": return PlayerPosition.LW
-        case "RW": return PlayerPosition.RW
-        case "CF": return PlayerPosition.CF
-        case "CAM": return PlayerPosition.CAM
-        case "CM": return PlayerPosition.CM
-        case "CDM": return PlayerPosition.CDM
-        case "LM": return PlayerPosition.LM
-        case "RM": return PlayerPosition.RM
-        case "CB": return PlayerPosition.CB
-        case "LB": return PlayerPosition.LB
-        case "RB": return PlayerPosition.RB
-        case "GK": return PlayerPosition.GK
-        case _: raise ValueError(f"Invalid position: {pos}")
-
-class PlayerRole(Enum): 
-    FORWARD = 1
-    MIDFIELD = 2
-    DEFENSE = 3
-    GOALKEEPER = 4
-
-def get_role(pos: PlayerPosition) -> PlayerRole:
-    match pos:
-        case PlayerPosition.ST | PlayerPosition.LW | PlayerPosition.RW: 
-            return PlayerRole.FORWARD
-        case PlayerPosition.CM | PlayerPosition.CDM | PlayerPosition.CAM | PlayerPosition.LM | PlayerPosition.RM: 
-            return PlayerRole.MIDFIELD
-        case PlayerPosition.CB | PlayerPosition.LB | PlayerPosition.RB: 
-            return PlayerRole.DEFENSE
-        case PlayerPosition.GK: 
-            return PlayerRole.GOALKEEPER
-        case _: 
-            return PlayerRole.GOALKEEPER # should never happen
 
 MAX_PRICE_FACTOR = 2.5
 
+# # ['Haaland', '', 'ST', '26', 'Manchester City', '99', '18', '58', '99', '44.6M']
 class Player: 
     def __init__(self, name, position, age, nationality, club, attack, defense, overall, main_stat, market_value=0.0, base_value=0.0):
         self.name = name
@@ -338,31 +288,6 @@ def gen_prices_interval(base: float, max: float, step: float = 0.1) -> list[floa
         prices.append(round(current_price, 2))
         current_price += step
     return prices
-
-def to_number(value): 
-    if value is None:
-        raise ValueError("Value cannot be None")
-    
-    if isinstance(value, (int, float)):
-        return float(value)
-    
-    if isinstance(value, str):
-        clean_val = value.strip()
-        
-        if not clean_val:
-            return None
-
-        try:
-            if clean_val.endswith("M"):
-                return float(clean_val[:-1])
-            elif clean_val.endswith("K"):
-                return float(clean_val[:-1]) / 1000
-            else:
-                return float(clean_val)
-        except ValueError:
-            return None
-
-    return float(value)
 
 # def get_selling_price(position, age, overall, base_value, matchday=1):
 #     player = Player(
