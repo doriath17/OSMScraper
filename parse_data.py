@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from Player import Player
+from model.Player import Player
 
 transfer_player_headers = {
     "NAME": "Name",

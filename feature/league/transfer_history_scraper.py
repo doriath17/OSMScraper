@@ -4,7 +4,7 @@ import time
 
 from rich.console import Console
 
-from Player import Player
+from model.Player import Player
 from TRParser import TRParser
 from feature.routing.BrowserState import BrowserState
 from model.Transfer import Transfer

@@ -1,6 +1,6 @@
 import pytest
 
-from Player import Player
+from model.Player import Player
 
 @pytest.mark.parametrize(
     "player_data, budget, operative_budget, matchday, expected_price_min, expected_price_max, min_score",

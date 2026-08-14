@@ -3,7 +3,6 @@ from model.PlayerPosition import get_position
 from model.PlayerRole import PlayerRole, get_role
 import math
 
-
 MAX_PRICE_FACTOR = 2.5
 
 # # ['Haaland', '', 'ST', '26', 'Manchester City', '99', '18', '58', '99', '44.6M']
@@ -266,21 +265,6 @@ Formulazione dello Score di Prezzo:
                 "final_score": round(final_score, 4)
             }
 
-
-    # def score(self, candidate_p: float, matchday: int, budget: float, operative_budget: float) -> float:
-    #     if self.market_value == 0:
-    #         return float('inf')
-
-    #     ev = self.exstimated_value(candidate_p, matchday=matchday)
-    #     roce_val = self.roce(candidate_p, matchday=matchday)
-        
-    #     a = self.alpha(budget, operative_budget)
-
-    #     # Mix dinamico tra EV puro e ROCE
-    #     # Nota: poichè EV e ROCE hanno scale diverse (milioni vs percentuale), 
-    #     # scaliamo il ROCE moltiplicandolo per un capitale di riferimento
-    #     return a * ev + (1 - a) * (roce_val * self.market_value)
-
 def gen_prices_interval(base: float, max: float, step: float = 0.1) -> list[float]:
     prices = []
     current_price = base
@@ -289,10 +273,19 @@ def gen_prices_interval(base: float, max: float, step: float = 0.1) -> list[floa
         current_price += step
     return prices
 
-# def get_selling_price(position, age, overall, base_value, matchday=1):
-#     player = Player(
-#         name="", position=position, age=age, nationality="", club="",
-#         attack=0, defense=0, overall=overall, main_stat=overall,
-#         market_value=0.0, base_value=base_value
-#     )
-#     return player.selling_price(matchday=matchday)
+
+def build_empty_player() -> Player:
+    return Player(
+        name="Empty Player",
+        position="ST",
+        age=18,
+        nationality="",
+        club="",
+        attack=0,
+        defense=0,
+        overall=0,
+        main_stat=0,
+        market_value=0.0,
+        base_value=0.0
+    )
+

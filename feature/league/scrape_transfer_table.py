@@ -4,7 +4,7 @@ import re
 import csv
 from typing import TYPE_CHECKING
 
-from Player import Player
+from model.Player import Player
 from feature.routing.BrowserState import BrowserState
 from model.utils import to_number
 

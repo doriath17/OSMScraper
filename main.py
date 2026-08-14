@@ -7,7 +7,7 @@ from rich.prompt import Prompt
 from change_league import STATE_FILE
 from feature.league.scrape_league_info import scrape_league_info
 from feature.league.transfer_history_scraper import scrape_transfer_history
-from feature.league.transfer_page import open_transfer_page
+from feature.routing.transfer_page import open_transfer_page
 from feature.routing.BrowserState import BrowserState, launch_browser
 from feature.routing.league_selection import open_league_selection, select_league
 from interactive_player import main as run_interactive_player

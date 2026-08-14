@@ -6,7 +6,7 @@ from rich.prompt import IntPrompt, FloatPrompt, Prompt
 from rich.panel import Panel
 from rich.table import Table
 
-from Player import Player
+from model.Player import Player
 
 console = Console()
 CURRENT_LEAGUE_PATH = Path("./tmp/current_league.json")
