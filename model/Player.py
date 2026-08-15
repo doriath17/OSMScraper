@@ -74,13 +74,13 @@ Formulazione dello Score di Prezzo:
    - Permette di fissare prezzi più alti (~2.5x base) per massimizzare il
      margine netto (Delta P).
 """
-    def selling_price(self, budget: float, operative_budget: float, matchday: int = 0) -> dict:
+    def selling_price(self, budget: float, operative_budget: float, matchday: int = 0, is_transfer_madness: bool = False) -> dict:
         max_price = self.max_price()
         candidates = gen_prices_interval(self.base_value, max_price, step=0.1)
 
         # Genera per ogni prezzo candidato il dizionario dei dettagli
         evaluation_results = [
-            (candidate_p, self.score(candidate_p, matchday, budget, operative_budget))
+            (candidate_p, self.score(candidate_p, matchday, budget, operative_budget, is_transfer_madness))
             for candidate_p in candidates
         ]
 
@@ -171,7 +171,7 @@ Formulazione dello Score di Prezzo:
             Player.W_ROLE * self.f_role())
 
     # Questo valore indica la probabilità di vendita del giocatore in un singolo ciclo di mercato. 
-    def prob_sale(self, candidate_p: float, matchday=0) -> dict:
+    def prob_sale(self, candidate_p: float, matchday: int =0, is_transfer_madness: bool =False) -> dict:
         z = self.z_score(candidate_p, matchday=matchday)
         result = 1.0 / (1.0 + math.exp(-z))  # Sigmoid function to convert z to probability
         return {
@@ -219,51 +219,51 @@ Formulazione dello Score di Prezzo:
     # della prob di vendita). Siccome basi questa scelta in base al budget e al budget 
     # operativo, lo score tendera al roce o all'estimated value per essere il piu 
     # efficiente possibile. 
-    def score(self, candidate_p: float, matchday: int, budget: float, operative_budget: float) -> dict:
-            if self.market_value == 0:
-                return {
-                    "profit": 0.0,
-                    "z_score": 0.0,
-                    "p_sale": 0.0,
-                    "ev": 0.0,
-                    "roce": float('inf'),
-                    "capital_risk": 0.0,
-                    "final_score": float('inf')
-                }
-
-            profit = self.profit(candidate_p)
-            if profit <= 0:
-                return {
-                    "profit": profit,
-                    "z_score": 0.0,
-                    "p_sale": 0.0,
-                    "ev": 0.0,
-                    "roce": 0.0,
-                    "capital_risk": 0.0,
-                    "final_score": -1.0
-                }
-
-            p_sale = self.prob_sale(candidate_p, matchday=matchday)
-            ev = self.exstimated_value(candidate_p, matchday=matchday)
-            roce_val = self.roce(candidate_p, matchday=matchday)
-
-            # Calcolo dinamico del rischio di cassa
-            alpha_weight = min(1.0, max(0.0, operative_budget / (budget if budget > 0 else 0.01)))
-            cap_ratio = self.market_value / (operative_budget if operative_budget > 0 else 0.01)
-            capital_risk = (1.0 - alpha_weight) * math.log1p(cap_ratio)
-
-            # Score finale basato sull'accelerazione della liquidità
-            final_score = ev * (p_sale["prob_sale"] ** capital_risk)
-
+    def score(self, candidate_p: float, matchday: int, budget: float, operative_budget: float, is_transfer_madness: bool = False) -> dict:
+        if self.market_value == 0:
             return {
-                "profit": round(profit, 2),
-                "z_score": round(p_sale["z_score"], 4),
-                "p_sale": round(p_sale["prob_sale"], 4),
-                "ev": round(ev, 4),
-                "roce": round(roce_val, 4) if roce_val != float('inf') else float('inf'),
-                "capital_risk": round(capital_risk, 4),
-                "final_score": round(final_score, 4)
+                "profit": 0.0,
+                "z_score": 0.0,
+                "p_sale": 0.0,
+                "ev": 0.0,
+                "roce": float('inf'),
+                "capital_risk": 0.0,
+                "final_score": float('inf')
             }
+
+        profit = self.profit(candidate_p)
+        if profit <= 0:
+            return {
+                "profit": profit,
+                "z_score": 0.0,
+                "p_sale": 0.0,
+                "ev": 0.0,
+                "roce": 0.0,
+                "capital_risk": 0.0,
+                "final_score": -1.0
+            }
+
+        p_sale = self.prob_sale(candidate_p, matchday=matchday, is_transfer_madness=is_transfer_madness)
+        ev = self.exstimated_value(candidate_p, matchday=matchday)
+        roce_val = self.roce(candidate_p, matchday=matchday)
+
+        # Calcolo dinamico del rischio di cassa
+        alpha_weight = min(1.0, max(0.0, operative_budget / (budget if budget > 0 else 0.01)))
+        cap_ratio = self.market_value / (operative_budget if operative_budget > 0 else 0.01)
+        capital_risk = (1.0 - alpha_weight) * math.log1p(cap_ratio)
+
+        # Score finale basato sull'accelerazione della liquidità
+        final_score = ev * (p_sale["prob_sale"] ** capital_risk)
+
+        return {
+            "profit": round(profit, 2),
+            "z_score": round(p_sale["z_score"], 4),
+            "p_sale": round(p_sale["prob_sale"], 4),
+            "ev": round(ev, 4),
+            "roce": round(roce_val, 4) if roce_val != float('inf') else float('inf'),
+            "capital_risk": round(capital_risk, 4),
+            "final_score": round(final_score, 4)
+        }
 
 def gen_prices_interval(base: float, max: float, step: float = 0.1) -> list[float]:
     prices = []

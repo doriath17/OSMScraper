@@ -136,7 +136,8 @@ def filter_players(
     players: list[Player], 
     budget: float, 
     op_budget: float, 
-    matchday: int = 1, 
+    matchday: int = 1,
+    transfer_madness: bool = False,
 ) -> list[Player]:
     """
     Filtra e ordina una lista di giocatori selezionando i migliori candidati 
@@ -159,7 +160,8 @@ def filter_players(
             sp_info = player.selling_price(
                 budget=budget, 
                 operative_budget=op_budget, 
-                matchday=matchday
+                matchday=matchday,
+                is_transfer_madness=transfer_madness    
             )
             
             # Salviamo la tupla (player, score) per l'ordinamento
@@ -170,7 +172,7 @@ def filter_players(
 
     return [player for player, score in valid_candidates]
 
-def build_analysis_table(players: list[Player], matchday: int, budget: float, op_budget: float, limit: int | None = None, verbose: bool = False) -> Table:
+def build_analysis_table(players: list[Player], matchday: int, budget: float, op_budget: float, limit: int | None = None, verbose: bool = False, transfer_madness: bool = False) -> Table:
     visible_players = players if limit is None else players[:limit]
     table = Table(
         title=f"Top transfer targets by score for matchday {matchday}",
@@ -204,9 +206,10 @@ def build_analysis_table(players: list[Player], matchday: int, budget: float, op
 
     for player in visible_players:
         sp_result = player.selling_price(
-            budget=budget, 
-            operative_budget=op_budget, 
-            matchday=matchday
+            budget=budget,
+            operative_budget=op_budget,
+            is_transfer_madness=transfer_madness,
+            matchday=matchday,
         )
 
         # 2. Estrazione del prezzo e dei dettagli parziali già calcolati per quel prezzo ottimale
@@ -348,7 +351,7 @@ def operative_budget(budget: float, security_deposit: float = 0.0, planned_expen
     """Calculate the operative budget available for player transfers, considering free slots."""
     return max(0.0, budget - security_deposit - planned_expenses) / max(1, free_slots)
 
-def run_analysis(league_index: int, limit: int | None = None, security_deposit: float = 0.0, planned_expenses: float = 0.0, free_slots: int = 1, verbose: bool = False, matchday_arg: int | None = None, budget_arg: float | None = None):
+def run_analysis(league_index: int, limit: int | None = None, security_deposit: float = 0.0, planned_expenses: float = 0.0, free_slots: int = 1, verbose: bool = False, matchday_arg: int | None = None, budget_arg: float | None = None, transfer_madness: bool = False):
     console = Console()
     normalized_index = normalize_slot_index(league_index)
 
@@ -377,7 +380,7 @@ def run_analysis(league_index: int, limit: int | None = None, security_deposit: 
     op_budget = operative_budget(budget, security_deposit=security_deposit, planned_expenses=planned_expenses, free_slots=free_slots)
 
     console.print(f"[cyan]Using matchday {matchday} and budget {budget:.1f}M (operative budget: {op_budget:.1f}M) for analysis.[/cyan]")
-    filtered_players = filter_players(players, budget=budget, op_budget=op_budget, matchday=matchday)
+    filtered_players = filter_players(players, budget=budget, op_budget=op_budget, matchday=matchday, transfer_madness=transfer_madness)
 
     team_name = league_info.get("team_name", "Unknown team")
     league_country = league_info.get("league_country", "Unknown country")
@@ -402,7 +405,7 @@ def run_analysis(league_index: int, limit: int | None = None, security_deposit: 
         console.print("[yellow]No players match the current budget and matchday.[/yellow]")
         return
 
-    console.print(build_analysis_table(filtered_players, matchday=matchday, budget=budget, op_budget=op_budget, limit=limit, verbose=verbose))
+    console.print(build_analysis_table(filtered_players, matchday=matchday, budget=budget, op_budget=op_budget, limit=limit, verbose=verbose, transfer_madness=transfer_madness))
 
     console.print("")
     top_player = filtered_players[0]
@@ -410,7 +413,8 @@ def run_analysis(league_index: int, limit: int | None = None, security_deposit: 
     sp_result = top_player.selling_price(
         budget=budget, 
         operative_budget=op_budget, 
-        matchday=matchday
+        matchday=matchday,
+        is_transfer_madness=transfer_madness
     )
 
     # 2. Estrazione del prezzo e dei dettagli parziali già calcolati per quel prezzo ottimale
@@ -443,10 +447,11 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output to see an in depth analysis.")
     parser.add_argument("--matchday", type=int, default=None, help="Optional Matchday specifier")
     parser.add_argument("--budget", type=float, default=None, help="Optional Budget specifier")
+    parser.add_argument("--transfer-madness", action="store_true", help="Enable transfer madness mode to double the probability of sale.")
 
     args = parser.parse_args()
     
-    run_analysis(league_index=args.league_index, limit=args.limit, free_slots=args.free_slots, verbose=args.verbose, matchday_arg=args.matchday, budget_arg=args.budget)
+    run_analysis(league_index=args.league_index, limit=args.limit, free_slots=args.free_slots, verbose=args.verbose, matchday_arg=args.matchday, budget_arg=args.budget, transfer_madness=args.transfer_madness)
 
 # example usage:
 # clear; python parse_data.py --league-index 2 --free-slots 1 --verbose --limit 10 --matchday 3
