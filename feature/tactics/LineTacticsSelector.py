@@ -8,7 +8,8 @@ from enum import Enum
 from rich.console import Console
 
 from GameDifferentialAnalysis import GameDifferentialAnalysis
-from GameModule import GameModuleType, GamePlan
+from GamePlan import GamePlan
+from GameModuleType import GameModuleType
 
 console = Console()
 

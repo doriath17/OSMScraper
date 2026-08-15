@@ -1,9 +1,13 @@
 from dataclasses import dataclass
+from typing import Dict, List, Optional
 
 from rich.console import Console
 
 from GameDifferentialAnalysis import GameDifferentialAnalysis
-from GameModule import GameModuleType, GamePlan
+from GamePlan import GamePlan
+from GamePlanSelector import GamePlanSelector
+from GameModuleType import GameModuleType
+from GameDefense import DefensiveInstructionsSelector, DefensiveSetup, MarkingType, OffsideTrap
 
 console = Console()
 
@@ -14,6 +18,20 @@ class ModuleScore:
     score: float
     breakdown: dict[str, float]
 
+@dataclass(frozen=True)
+class TacticalRecommendation:
+    module: GameModuleType
+    game_plan: GamePlan
+    score: float
+    breakdown: Dict[str, float]
+
+@dataclass(frozen=True)
+class FullTacticalRecommendation:
+    module: GameModuleType
+    game_plan: GamePlan
+    defensive_setup: DefensiveSetup
+    overall_score: float
+
 class ModuleSelector: 
 
     def __init__(self, differential_analysis: GameDifferentialAnalysis):
@@ -21,7 +39,12 @@ class ModuleSelector:
         self.g_counter = ModuleSelector.calculate_g_counter(differential_analysis.player.module, differential_analysis.opponent.module)
         self.p_risk = ModuleSelector.calculate_p_risk(differential_analysis.k, differential_analysis.player.module, differential_analysis.opponent.module)
         self.h = ModuleSelector.calculate_h(differential_analysis.k, differential_analysis.player.module, differential_analysis.opponent.module)
-        self.top_modules = ModuleSelector.select_top_modules(differential_analysis.k, differential_analysis.opponent.module, top_n=5)
+        self.full_tactical_recommendations = ModuleSelector.get_complete_tactical_advice(
+            k=differential_analysis.k,
+            adv_module=differential_analysis.opponent.module,
+            adv_plan=differential_analysis.opponent.game_plan,
+            top_n=5
+        )
 
     def print(self):
         console.print(f"[bold]f_fit:[/bold] {self.f_fit:.4f}, weighted: {self.h[1]['f_fit_weighted']:.2f}")
@@ -29,9 +52,10 @@ class ModuleSelector:
         console.print(f"[bold]p_risk:[/bold] {self.p_risk:.2f}, weighted: {self.h[1]['p_risk_weighted']:.2f}")
         console.print(f"[bold]h:[/bold] {self.h[0]:.2f}")
         console.print("\n[bold underline]Top 5 Modules[/bold underline]")
-        for idx, module_score in enumerate(self.top_modules, start=1):
-            console.print(f"{idx}. [bold]{module_score.module.value.code}[/bold] - Score: {module_score.score:.2f}")
-            console.print(f"   Breakdown: f_fit={module_score.breakdown['f_fit_raw']:.4f}, g_counter={module_score.breakdown['g_counter_raw']:.2f}, p_risk={module_score.breakdown['p_risk_raw']:.2f}")
+        for idx, module_score in enumerate(self.full_tactical_recommendations, start=1):
+            console.print(f"{idx}. [bold]{module_score.module.value.code}[/bold] - Score: {module_score.overall_score:.2f}")
+            console.print(f"   Game Plan: {module_score.game_plan.value_name if module_score.game_plan else 'None'}")
+            console.print(f"   Defensive Setup: {module_score.defensive_setup.marking.value}, Offside Trap: {module_score.defensive_setup.offside_trap.value}\n")
 
     W_MID = 1.2 # Peso scalare per il differenziale di centrocampo (default: 1.2)
     W1_FIT = 10.0
@@ -278,36 +302,66 @@ class ModuleSelector:
 
         return best_module
 
+
+
+    # =============================================================================
+    # FUNZIONE DI RICERCA ESAUSTIVA DELLA COPPIA OTTIMALE (M*, P*)
+    # =============================================================================
     @staticmethod
-    def select_top_modules(
-        k: float, 
-        opponent_module: GameModuleType, 
+    def get_complete_tactical_advice(
+        k: float,
+        adv_module: GameModuleType,
+        adv_plan: Optional[GamePlan] = None,
+        adv_marking: Optional[MarkingType] = None,
+        adv_offside: Optional[OffsideTrap] = None,
         top_n: int = 5
-    ) -> list[ModuleScore]:
+    ) -> List[FullTacticalRecommendation]:
         """
-        Itera su tutti i moduli presenti nell'enum GameModuleType, calcola la funzione 
-        di scoring h per ciascuno e restituisce i primi N moduli ordinati per punteggio decrescente.
-
-        :param k: Forza relativa della squadra in [0.0, 1.0].
-        :param opponent_module: Modulo schierato dall'avversario M_adv.
-        :param top_n: Numero di moduli top da restituire (default: 5).
-        :return: Lista ordinata di oggetti ModuleScore (dal migliore al peggiore).
+        Esplora il prodotto cartesiano {GameModuleType} x {GamePlan}, determina l'assetto 
+        difensivo ottimale per ciascuna combinazione e restituisce le migliori N tattiche complete.
         """
-        candidates: list[ModuleScore] = []
+        full_recommendations: List[FullTacticalRecommendation] = []
 
-        # 1. Calcolo dello score per ogni modulo candidato
+        # 1. Prodotto cartesiano tra tutti i moduli e tutti i piani di gioco
         for candidate_module in GameModuleType:
-            score_h, breakdown = ModuleSelector.calculate_h(k, candidate_module, opponent_module)
-            candidates.append(
-                ModuleScore(
+            module_base_score, _ = ModuleSelector.calculate_h(k, candidate_module, adv_module)
+
+            for candidate_plan in GamePlan:
+                # Valutazione del piano di gioco con tutti i parametri avversari
+                plan_score, _ = GamePlanSelector.evaluate_pair(
                     module=candidate_module,
-                    score=score_h,
-                    breakdown=breakdown
+                    plan=candidate_plan,
+                    k=k,
+                    adv_module=adv_module,
+                    adv_plan=adv_plan,
+                    adv_marking=adv_marking,
+                    adv_offside=adv_offside
                 )
-            )
 
-        # 2. Ordinamento decrescente in base a score_h
-        candidates.sort(key=lambda x: x.score, reverse=True)
+                # Calcolo istruzioni difensive (Marcatura + Fuorigioco) per la combinazione corrente
+                def_setup = DefensiveInstructionsSelector.evaluate_defensive_setup(
+                    my_module=candidate_module,
+                    my_plan=candidate_plan,
+                    k=k,
+                    adv_module=adv_module,
+                    adv_plan=adv_plan,
+                    adv_marking=adv_marking,
+                    adv_offside=adv_offside
+                )
 
-        # 3. Restituzione dei primi top_n moduli
-        return candidates[:top_n]
+                # Score totale pesato: combinazione (Modulo + Plan) scalata sul coefficiente difensivo
+                combined_tactical_score = 0.5 * module_base_score + 0.5 * plan_score
+                overall_score = round(combined_tactical_score * def_setup.score, 4)
+
+                full_recommendations.append(
+                    FullTacticalRecommendation(
+                        module=candidate_module,
+                        game_plan=candidate_plan,
+                        defensive_setup=def_setup,
+                        overall_score=overall_score
+                    )
+                )
+
+        # 2. Ordinamento decrescente per overall_score e ritaglio sui Top N
+        full_recommendations.sort(key=lambda x: x.overall_score, reverse=True)
+        return full_recommendations[:top_n]
